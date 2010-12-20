@@ -70,8 +70,21 @@ static struct platform_device *paz00_devices[] __initdata = {
 	&tegra_sdhci_device4,
 };
 
-static void __init tegra_paz00_fixup(struct machine_desc *desc,
-	struct tag *tags, char **cmdline, struct meminfo *mi)
+static void paz00_i2c_init(void)
+{
+	platform_device_register(&tegra_i2c_device1);
+	platform_device_register(&tegra_i2c_device2);
+	platform_device_register(&tegra_i2c_device4);
+}
+
+static void paz00_usb_init(void)
+{
+	platform_device_register(&tegra_ehci2_device);
+	platform_device_register(&tegra_ehci3_device);
+}
+
+static void __init tegra_paz00_fixup(struct tag *tags, char **cmdline,
+	struct meminfo *mi)
 {
 	mi->nr_banks = 1;
 	mi->bank[0].start = PHYS_OFFSET;
