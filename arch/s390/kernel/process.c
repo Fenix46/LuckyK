@@ -93,9 +93,9 @@ void cpu_idle(void)
 		while (!need_resched())
 			default_idle();
 		tick_nohz_restart_sched_tick();
-		preempt_enable_no_resched();
-		schedule();
-		preempt_disable();
+		if (test_thread_flag(TIF_MCCK_PENDING))
+			s390_handle_mcck();
+		schedule_preempt_disabled();
 	}
 }
 
