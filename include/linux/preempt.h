@@ -33,7 +33,7 @@ do { \
 	barrier(); \
 } while (0)
 
-#define preempt_enable_no_resched() \
+#define sched_preempt_enable_no_resched() \
 do { \
 	barrier(); \
 	dec_preempt_count(); \
@@ -44,6 +44,8 @@ do { \
 	if (unlikely(test_thread_flag(TIF_NEED_RESCHED))) \
 		preempt_schedule(); \
 } while (0)
+
+#define preempt_enable_no_resched()	sched_preempt_enable_no_resched()
 
 #define preempt_enable() \
 do { \
@@ -82,6 +84,7 @@ do { \
 
 #else
 
+<<<<<<< HEAD
 /*
  * Even if we don't have any preemption, we need preempt disable/enable
  * to be barriers, so that we don't have things like get_user/put_user
@@ -92,6 +95,12 @@ do { \
 #define preempt_enable_no_resched()	barrier()
 #define preempt_enable()		barrier()
 #define preempt_check_resched()		barrier()
+=======
+#define preempt_disable()		do { } while (0)
+#define sched_preempt_enable_no_resched()	do { } while (0)
+#define preempt_enable_no_resched()	do { } while (0)
+#define preempt_enable()		do { } while (0)
+>>>>>>> ba74c14... sched/rt: Document scheduler related skip-resched-check sites
 
 #define preempt_disable_notrace()		barrier()
 #define preempt_enable_no_resched_notrace()	barrier()
