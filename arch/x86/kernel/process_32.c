@@ -115,9 +115,7 @@ void cpu_idle(void)
 		}
 		idle_notifier_call_chain(IDLE_END);
 		tick_nohz_restart_sched_tick();
-		preempt_enable_no_resched();
-		schedule();
-		preempt_disable();
+		schedule_preempt_disabled();
 	}
 }
 
