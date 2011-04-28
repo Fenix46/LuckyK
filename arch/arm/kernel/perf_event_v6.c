@@ -405,6 +405,7 @@ armv6pmu_enable_event(struct hw_perf_event *hwc,
 		      int idx)
 {
 	unsigned long val, mask, evt, flags;
+	struct cpu_hw_events *events = armpmu->get_hw_events();
 
 	if (ARMV6_CYCLE_COUNTER == idx) {
 		mask	= 0;
@@ -426,12 +427,12 @@ armv6pmu_enable_event(struct hw_perf_event *hwc,
 	 * Mask out the current event and set the counter to count the event
 	 * that we're interested in.
 	 */
-	raw_spin_lock_irqsave(&pmu_lock, flags);
+	raw_spin_lock_irqsave(&events->pmu_lock, flags);
 	val = armv6_pmcr_read();
 	val &= ~mask;
 	val |= evt;
 	armv6_pmcr_write(val);
-	raw_spin_unlock_irqrestore(&pmu_lock, flags);
+	raw_spin_unlock_irqrestore(&events->pmu_lock, flags);
 }
 
 static int counter_is_active(unsigned long pmcr, int idx)
@@ -516,24 +517,26 @@ static void
 armv6pmu_start(void)
 {
 	unsigned long flags, val;
+	struct cpu_hw_events *events = armpmu->get_hw_events();
 
-	raw_spin_lock_irqsave(&pmu_lock, flags);
+	raw_spin_lock_irqsave(&events->pmu_lock, flags);
 	val = armv6_pmcr_read();
 	val |= ARMV6_PMCR_ENABLE;
 	armv6_pmcr_write(val);
-	raw_spin_unlock_irqrestore(&pmu_lock, flags);
+	raw_spin_unlock_irqrestore(&events->pmu_lock, flags);
 }
 
 static void
 armv6pmu_stop(void)
 {
 	unsigned long flags, val;
+	struct cpu_hw_events *events = armpmu->get_hw_events();
 
-	raw_spin_lock_irqsave(&pmu_lock, flags);
+	raw_spin_lock_irqsave(&events->pmu_lock, flags);
 	val = armv6_pmcr_read();
 	val &= ~ARMV6_PMCR_ENABLE;
 	armv6_pmcr_write(val);
-	raw_spin_unlock_irqrestore(&pmu_lock, flags);
+	raw_spin_unlock_irqrestore(&events->pmu_lock, flags);
 }
 
 static int
@@ -567,6 +570,7 @@ armv6pmu_disable_event(struct hw_perf_event *hwc,
 		       int idx)
 {
 	unsigned long val, mask, evt, flags;
+	struct cpu_hw_events *events = armpmu->get_hw_events();
 
 	if (ARMV6_CYCLE_COUNTER == idx) {
 		mask	= ARMV6_PMCR_CCOUNT_IEN;
@@ -587,12 +591,12 @@ armv6pmu_disable_event(struct hw_perf_event *hwc,
 	 * of ETM bus signal assertion cycles. The external reporting should
 	 * be disabled and so this should never increment.
 	 */
-	raw_spin_lock_irqsave(&pmu_lock, flags);
+	raw_spin_lock_irqsave(&events->pmu_lock, flags);
 	val = armv6_pmcr_read();
 	val &= ~mask;
 	val |= evt;
 	armv6_pmcr_write(val);
-	raw_spin_unlock_irqrestore(&pmu_lock, flags);
+	raw_spin_unlock_irqrestore(&events->pmu_lock, flags);
 }
 
 static void
@@ -600,6 +604,7 @@ armv6mpcore_pmu_disable_event(struct hw_perf_event *hwc,
 			      int idx)
 {
 	unsigned long val, mask, flags, evt = 0;
+	struct cpu_hw_events *events = armpmu->get_hw_events();
 
 	if (ARMV6_CYCLE_COUNTER == idx) {
 		mask	= ARMV6_PMCR_CCOUNT_IEN;
@@ -616,12 +621,12 @@ armv6mpcore_pmu_disable_event(struct hw_perf_event *hwc,
 	 * Unlike UP ARMv6, we don't have a way of stopping the counters. We
 	 * simply disable the interrupt reporting.
 	 */
-	raw_spin_lock_irqsave(&pmu_lock, flags);
+	raw_spin_lock_irqsave(&events->pmu_lock, flags);
 	val = armv6_pmcr_read();
 	val &= ~mask;
 	val |= evt;
 	armv6_pmcr_write(val);
-	raw_spin_unlock_irqrestore(&pmu_lock, flags);
+	raw_spin_unlock_irqrestore(&events->pmu_lock, flags);
 }
 
 static struct arm_pmu armv6pmu = {
