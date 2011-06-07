@@ -1024,10 +1024,9 @@ struct perf_event_context {
 	u64				parent_gen;
 	u64				generation;
 	int				pin_count;
-	int				nr_cgroups;	 /* cgroup evts */
+	int				nr_cgroups; /* cgroup events present */
 	int				nr_branch_stack; /* branch_stack evt */
 	struct rcu_head			rcu_head;
-	int				nr_cgroups; /* cgroup events present */
 };
 
 /*
