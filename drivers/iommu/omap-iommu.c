@@ -765,7 +765,7 @@ static void iopgtable_clear_entry_all(struct omap_iommu *obj)
 
 	spin_unlock(&obj->page_table_lock);
 }
-
+EXPORT_SYMBOL_GPL(iopgtable_clear_entry_all);
 /*
  *	Device IOMMU generic operations
  */
