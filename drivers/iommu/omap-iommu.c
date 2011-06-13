@@ -16,8 +16,11 @@
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/ioport.h>
-#include <linux/clk.h>
 #include <linux/platform_device.h>
+#include <linux/iommu.h>
+#include <linux/mutex.h>
+#include <linux/spinlock.h>
+#include <linux/pm_runtime.h>
 
 #include <asm/cacheflush.h>
 
@@ -128,6 +131,8 @@ static int iommu_enable(struct omap_iommu *obj)
 	if (!arch_iommu)
 		return -ENODEV;
 
+	pm_runtime_get_sync(obj->dev);
+
 	err = arch_iommu->enable(obj);
 
 	return err;
@@ -139,6 +144,8 @@ static void iommu_disable(struct omap_iommu *obj)
 		return;
 
 	arch_iommu->disable(obj);
+
+	pm_runtime_put(obj->dev);
 }
 
 /*
@@ -266,6 +273,8 @@ static int load_iotlb_entry(struct omap_iommu *obj, struct iotlb_entry *e)
 	if (!obj || !obj->nr_tlb_entries || !e)
 		return -EINVAL;
 
+	pm_runtime_get_sync(obj->dev);
+
 	iotlb_lock_get(obj, &l);
 	if (l.base == obj->nr_tlb_entries) {
 		dev_warn(obj->dev, "%s: preserve entries full\n", __func__);
@@ -294,6 +303,7 @@ static int load_iotlb_entry(struct omap_iommu *obj, struct iotlb_entry *e)
 
 	cr = iotlb_alloc_cr(obj, e);
 	if (IS_ERR(cr)) {
+		pm_runtime_put(obj->dev);
 		return PTR_ERR(cr);
 	}
 
@@ -307,6 +317,7 @@ static int load_iotlb_entry(struct omap_iommu *obj, struct iotlb_entry *e)
 		l.vict = l.base;
 	iotlb_lock_set(obj, &l);
 out:
+	pm_runtime_put(obj->dev);
 	return err;
 }
 
@@ -340,6 +351,7 @@ static void flush_iotlb_page(struct omap_iommu *obj, u32 da)
 		WARN_ON(1);
 		return;
 	}
+	pm_runtime_get_sync(obj->dev);
 
 	for_each_iotlb_cr(obj, obj->nr_tlb_entries, i, cr) {
 		u32 start;
@@ -358,6 +370,7 @@ static void flush_iotlb_page(struct omap_iommu *obj, u32 da)
 			iommu_write_reg(obj, 1, MMU_FLUSH_ENTRY);
 		}
 	}
+	pm_runtime_put(obj->dev);
 
 	if (i == obj->nr_tlb_entries)
 		dev_dbg(obj->dev, "%s: no page for %08x\n", __func__, da);
@@ -371,11 +384,15 @@ static void flush_iotlb_all(struct omap_iommu *obj)
 {
 	struct iotlb_lock l;
 
+	pm_runtime_get_sync(obj->dev);
+
 	l.base = 0;
 	l.vict = 0;
 	iotlb_lock_set(obj, &l);
 
 	iommu_write_reg(obj, 1, MMU_GFLUSH);
+
+	pm_runtime_put(obj->dev);
 }
 
 #if defined(CONFIG_OMAP_IOMMU_DEBUG) || defined(CONFIG_OMAP_IOMMU_DEBUG_MODULE)
@@ -385,7 +402,11 @@ ssize_t omap_iommu_dump_ctx(struct omap_iommu *obj, char *buf, ssize_t bytes)
 	if (!obj || !buf)
 		return -EINVAL;
 
+	pm_runtime_get_sync(obj->dev);
+
 	bytes = arch_iommu->dump_ctx(obj, buf, bytes);
+
+	pm_runtime_put(obj->dev);
 
 	return bytes;
 }
@@ -399,6 +420,7 @@ __dump_tlb_entries(struct omap_iommu *obj, struct cr_regs *crs, int num)
 	struct cr_regs tmp;
 	struct cr_regs *p = crs;
 
+	pm_runtime_get_sync(obj->dev);
 	iotlb_lock_get(obj, &saved);
 
 	for_each_iotlb_cr(obj, num, i, tmp) {
@@ -408,6 +430,7 @@ __dump_tlb_entries(struct omap_iommu *obj, struct cr_regs *crs, int num)
 	}
 
 	iotlb_lock_set(obj, &saved);
+	pm_runtime_put(obj->dev);
 
 	return  p - crs;
 }
@@ -999,6 +1022,8 @@ static int __devinit omap_iommu_probe(struct platform_device *pdev)
 		goto err_irq;
 	platform_set_drvdata(pdev, obj);
 
+	pm_runtime_enable(obj->dev);
+
 	p = (void *)__get_free_pages(GFP_KERNEL, get_order(IOPGD_TABLE_SIZE));
 	if (!p) {
 		err = -ENOMEM;
@@ -1016,6 +1041,10 @@ static int __devinit omap_iommu_probe(struct platform_device *pdev)
 err_pgd:
 	free_irq(pdata->irq, obj);
 err_irq:
+	iounmap(obj->regbase);
+err_ioremap:
+	release_mem_region(res->start, resource_size(res));
+err_mem:
 	kfree(obj);
 	return err;
 }
@@ -1035,6 +1064,8 @@ static int __devexit omap_iommu_remove(struct platform_device *pdev)
 
 	pm_qos_remove_request(obj->qos_request);
 	kfree(obj->qos_request);
+
+	pm_runtime_disable(obj->dev);
 
 	dev_info(&pdev->dev, "%s removed\n", obj->name);
 	kfree(obj);
@@ -1124,6 +1155,7 @@ omap_iommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 	omap_domain->iommu_dev = arch_data->iommu_dev = oiommu;
 	oiommu->domain = domain;
 
+
 out:
 	spin_unlock(&omap_domain->lock);
 	return ret;
@@ -1149,6 +1181,7 @@ static void omap_iommu_detach_dev(struct iommu_domain *domain,
 	omap_iommu_detach(oiommu);
 
 	omap_domain->iommu_dev = arch_data->iommu_dev = NULL;
+
 
 out:
 	spin_unlock(&omap_domain->lock);

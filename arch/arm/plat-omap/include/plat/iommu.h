@@ -111,7 +111,6 @@ struct iommu_functions {
 
 struct iommu_platform_data {
 	const char *name;
-	const char *clk_name;
 	int nr_tlb_entries;
 	u32 da_start;
 	u32 da_end;
