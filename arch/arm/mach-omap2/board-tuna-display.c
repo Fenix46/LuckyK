@@ -1092,21 +1092,21 @@ static struct omap_dss_board_info tuna_dss_data = {
 	.default_device	= &tuna_oled_device,
 };
 
-#if defined(CONFIG_FB_OMAP2_NUM_FBS)
-#define OMAPLFB_NUM_DEV CONFIG_FB_OMAP2_NUM_FBS
-#else
-#define OMAPLFB_NUM_DEV 1
-#endif
-
-static struct sgx_omaplfb_config omaplfb_config_tuna[OMAPLFB_NUM_DEV] = {
+static struct sgx_omaplfb_config omaplfb_config_tuna[] = {
 	{
-		.tiler2d_buffers = 2,
+		.tiler2d_buffers = 4,
 		.swap_chain_length = 2,
-	}
+	},
+#if defined(CONFIG_OMAP4_DSS_HDMI)
+	{
+	.vram_buffers = 2,
+	.swap_chain_length = 2,
+	},
+#endif
 };
 
 static struct sgx_omaplfb_platform_data tuna_omaplfb_plat_data = {
-	.num_configs = OMAPLFB_NUM_DEV,
+	.num_configs = ARRAY_SIZE(omaplfb_config_tuna),
 	.configs = omaplfb_config_tuna,
 };
 
@@ -1124,7 +1124,7 @@ void __init tuna_android_display_setup(void)
 {
 	omap_android_display_setup(&tuna_dss_data,
 				   &dsscomp_config_tuna,
-				   &tuna_omaplfb_plat_data,
+ 				   &tuna_omaplfb_plat_data,
 				   &tuna_fb_pdata);
 }
 
