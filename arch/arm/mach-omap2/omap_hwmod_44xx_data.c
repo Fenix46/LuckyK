@@ -3529,8 +3529,8 @@ static struct omap_hwmod_class omap44xx_mcbsp_hwmod_class = {
 /* mcbsp1 */
 static struct omap_hwmod omap44xx_mcbsp1_hwmod;
 static struct omap_hwmod_irq_info omap44xx_mcbsp1_irqs[] = {
-	{ .name = "common", .irq = 17 + OMAP44XX_IRQ_GIC_START },
-	{ .irq = -1 }
+	{ .name = "tx", .irq = 17 + OMAP44XX_IRQ_GIC_START },
+	{ .name = "rx", .irq = 0 },
 };
 
 static struct omap_hwmod_dma_info omap44xx_mcbsp1_sdma_reqs[] = {
@@ -3611,8 +3611,8 @@ static struct omap_hwmod omap44xx_mcbsp1_hwmod = {
 /* mcbsp2 */
 static struct omap_hwmod omap44xx_mcbsp2_hwmod;
 static struct omap_hwmod_irq_info omap44xx_mcbsp2_irqs[] = {
-	{ .name = "common", .irq = 22 + OMAP44XX_IRQ_GIC_START },
-	{ .irq = -1 }
+	{ .name = "tx", .irq = 22 + OMAP44XX_IRQ_GIC_START },
+	{ .name = "rx", .irq = 0 },
 };
 
 static struct omap_hwmod_dma_info omap44xx_mcbsp2_sdma_reqs[] = {
@@ -3693,8 +3693,8 @@ static struct omap_hwmod omap44xx_mcbsp2_hwmod = {
 /* mcbsp3 */
 static struct omap_hwmod omap44xx_mcbsp3_hwmod;
 static struct omap_hwmod_irq_info omap44xx_mcbsp3_irqs[] = {
-	{ .name = "common", .irq = 23 + OMAP44XX_IRQ_GIC_START },
-	{ .irq = -1 }
+	{ .name = "tx", .irq = 23 + OMAP44XX_IRQ_GIC_START },
+	{ .name = "rx", .irq = 0 },
 };
 
 static struct omap_hwmod_dma_info omap44xx_mcbsp3_sdma_reqs[] = {
@@ -3775,8 +3775,8 @@ static struct omap_hwmod omap44xx_mcbsp3_hwmod = {
 /* mcbsp4 */
 static struct omap_hwmod omap44xx_mcbsp4_hwmod;
 static struct omap_hwmod_irq_info omap44xx_mcbsp4_irqs[] = {
-	{ .name = "common", .irq = 16 + OMAP44XX_IRQ_GIC_START },
-	{ .irq = -1 }
+	{ .name = "tx", .irq = 16 + OMAP44XX_IRQ_GIC_START },
+	{ .name = "rx", .irq = 0 },
 };
 
 static struct omap_hwmod_dma_info omap44xx_mcbsp4_sdma_reqs[] = {
