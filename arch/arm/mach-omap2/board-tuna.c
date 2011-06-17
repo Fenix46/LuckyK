@@ -950,6 +950,15 @@ static int tuna_notifier_call(struct notifier_block *this,
 	return NOTIFY_DONE;
 }
 
+#if defined(CONFIG_DSSCOMP) && defined(CONFIG_EARLYSUSPEND)
+	/*
+	 * HACK: Blank screen to avoid screen artifacts due to removal of
+	 * DSS/panel drivers shutdown in reboot path.
+	 */
+	extern void dsscomp_early_suspend(struct early_suspend *h);
+	dsscomp_gralloc_queue();
+#endif
+
 static struct notifier_block tuna_reboot_notifier = {
 	.notifier_call = tuna_notifier_call,
 };
