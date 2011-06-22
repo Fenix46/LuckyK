@@ -4546,6 +4546,12 @@ need_resched:
 		goto need_resched;
 }
 
+asmlinkage void schedule(void)
+{
+	__schedule();
+}
+EXPORT_SYMBOL(schedule);
+
 static inline void sched_submit_work(struct task_struct *tsk)
 {
 	if (!tsk->state)
@@ -4557,15 +4563,6 @@ static inline void sched_submit_work(struct task_struct *tsk)
 	if (blk_needs_flush_plug(tsk))
 		blk_schedule_flush_plug(tsk);
 }
-
-asmlinkage void __sched schedule(void)
-{
-	struct task_struct *tsk = current;
-
-	sched_submit_work(tsk);
-	__schedule();
-}
-EXPORT_SYMBOL(schedule);
 
 #ifdef CONFIG_MUTEX_SPIN_ON_OWNER
 
