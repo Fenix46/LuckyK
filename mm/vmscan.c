@@ -305,7 +305,7 @@ unsigned long shrink_slab(struct shrink_control *shrink,
 		if (total_scan > max_pass * 2)
 			total_scan = max_pass * 2;
 
-		trace_mm_shrink_slab_start(shrinker, shrink, nr,
+		trace_mm_shrink_slab_start(shrinker, shrink, total_scan,
 					nr_pages_scanned, lru_pages,
 					max_pass, delta, total_scan);
 
