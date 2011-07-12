@@ -7,9 +7,6 @@ u64 memblock_x86_find_in_range_size(u64 start, u64 *sizep, u64 align);
 
 void memblock_x86_reserve_range(u64 start, u64 end, char *name);
 void memblock_x86_free_range(u64 start, u64 end);
-struct range;
-int __get_free_all_memory_range(struct range **range, int nodeid,
-			 unsigned long start_pfn, unsigned long end_pfn);
 
 void memblock_x86_register_active_regions(int nid, unsigned long start_pfn,
 					 unsigned long last_pfn);
