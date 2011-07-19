@@ -480,6 +480,23 @@ static int counter_is_active(unsigned long pmcr, int idx)
 	return 0;
 }
 
+static int counter_is_active(unsigned long pmcr, int idx)
+{
+	unsigned long mask = 0;
+	if (idx == ARMV6_CYCLE_COUNTER)
+		mask = ARMV6_PMCR_CCOUNT_IEN;
+	else if (idx == ARMV6_COUNTER0)
+		mask = ARMV6_PMCR_COUNT0_IEN;
+	else if (idx == ARMV6_COUNTER1)
+		mask = ARMV6_PMCR_COUNT1_IEN;
+
+	if (mask)
+		return pmcr & mask;
+
+	WARN_ONCE(1, "invalid counter number (%d)\n", idx);
+	return 0;
+}
+
 static irqreturn_t
 armv6pmu_handle_irq(int irq_num,
 		    void *dev)
