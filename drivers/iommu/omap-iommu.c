@@ -231,6 +231,7 @@ static struct cr_regs __iotlb_read_cr(struct iommu *obj, int n)
  * @obj:	target iommu
  * @e:		an iommu tlb entry info
  **/
+#ifdef PREFETCH_IOTLB
 static int load_iotlb_entry(struct iommu *obj, struct iotlb_entry *e)
 {
 	int err = 0;
@@ -287,6 +288,20 @@ static int load_iotlb_entry(struct iommu *obj, struct iotlb_entry *e)
 	iotlb_lock_set(obj, &l);
 out:
 	return err;
+}
+
+#else /* !PREFETCH_IOTLB */
+
+static int load_iotlb_entry(struct iommu *obj, struct iotlb_entry *e)
+{
+	return 0;
+}
+
+#endif /* !PREFETCH_IOTLB */
+
+static int prefetch_iotlb_entry(struct iommu *obj, struct iotlb_entry *e)
+{
+	return load_iotlb_entry(obj, e);
 }
 
 /**
@@ -630,10 +645,8 @@ int iopgtable_store_entry(struct iommu *obj, struct iotlb_entry *e)
 
 	flush_iotlb_page(obj, e->da);
 	err = iopgtable_store_entry_core(obj, e);
-#ifdef PREFETCH_IOTLB
 	if (!err)
-		load_iotlb_entry(obj, e);
-#endif
+		prefetch_iotlb_entry(obj, e);
 	return err;
 }
 EXPORT_SYMBOL_GPL(iopgtable_store_entry);
