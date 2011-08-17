@@ -80,6 +80,13 @@
 #include "isph3a.h"
 #include "isphist.h"
 
+/*
+ * this is provided as an interim solution until omap3isp doesn't need
+ * any omap-specific iommu API
+ */
+#define to_iommu(dev)							\
+	(struct omap_iommu *)platform_get_drvdata(to_platform_device(dev))
+
 static unsigned int autoidle;
 module_param(autoidle, int, 0444);
 MODULE_PARM_DESC(autoidle, "Enable OMAP3ISP AUTOIDLE support");
@@ -1108,7 +1115,7 @@ static void isp_save_ctx(struct isp_device *isp)
 {
 	isp_save_context(isp, isp_reg_list);
 	if (isp->iommu)
-		iommu_save_ctx(isp->iommu);
+		omap_iommu_save_ctx(isp->iommu);
 }
 
 /*
@@ -1122,7 +1129,7 @@ static void isp_restore_ctx(struct isp_device *isp)
 {
 	isp_restore_context(isp, isp_reg_list);
 	if (isp->iommu)
-		iommu_restore_ctx(isp->iommu);
+		omap_iommu_restore_ctx(isp->iommu);
 	omap3isp_ccdc_restore_context(isp);
 	omap3isp_preview_restore_context(isp);
 }
