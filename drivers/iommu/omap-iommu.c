@@ -344,26 +344,6 @@ static void flush_iotlb_page(struct iommu *obj, u32 da)
 }
 
 /**
- * flush_iotlb_range - Clear an iommu tlb entries
- * @obj:	target iommu
- * @start:	iommu device virtual address(start)
- * @end:	iommu device virtual address(end)
- *
- * Clear an iommu tlb entry which includes 'da' address.
- **/
-void flush_iotlb_range(struct iommu *obj, u32 start, u32 end)
-{
-	u32 da = start;
-
-	while (da < end) {
-		flush_iotlb_page(obj, da);
-		/* FIXME: Optimize for multiple page size */
-		da += IOPTE_SIZE;
-	}
-}
-EXPORT_SYMBOL_GPL(flush_iotlb_range);
-
-/**
  * flush_iotlb_all - Clear all iommu tlb entries
  * @obj:	target iommu
  **/
@@ -377,21 +357,6 @@ static void flush_iotlb_all(struct iommu *obj)
 
 	iommu_write_reg(obj, 1, MMU_GFLUSH);
 }
-
-/**
- * iommu_set_twl - enable/disable table walking logic
- * @obj:	target iommu
- * @on:		enable/disable
- *
- * Function used to enable/disable TWL. If one wants to work
- * exclusively with locked TLB entries and receive notifications
- * for TLB miss then call this function to disable TWL.
- */
-void iommu_set_twl(struct iommu *obj, bool on)
-{
-	arch_iommu->set_twl(obj, on);
-}
-EXPORT_SYMBOL_GPL(iommu_set_twl);
 
 #if defined(CONFIG_OMAP_IOMMU_DEBUG_MODULE)
 
@@ -827,28 +792,6 @@ static int device_match_by_alias(struct device *dev, void *data)
 
 	return strcmp(obj->name, name) == 0;
 }
-
-/**
- * iommu_set_da_range - Set a valid device address range
- * @obj:		target iommu
- * @start		Start of valid range
- * @end			End of valid range
- **/
-int iommu_set_da_range(struct iommu *obj, u32 start, u32 end)
-{
-
-	if (!obj)
-		return -EIO;
-
-	if (end < start || !PAGE_ALIGN(start | end))
-		return -EINVAL;
-
-	obj->da_start = start;
-	obj->da_end = end;
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(iommu_set_da_range);
 
 /**
  * _set_latency_cstr - set a latency constraint in the proper pwrdm

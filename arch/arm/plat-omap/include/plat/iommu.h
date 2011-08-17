@@ -162,12 +162,9 @@ struct iommu_platform_data {
 extern u32 iommu_arch_version(void);
 
 extern void iotlb_cr_to_e(struct cr_regs *cr, struct iotlb_entry *e);
-extern void iommu_set_twl(struct iommu *obj, bool on);
-extern void flush_iotlb_range(struct iommu *obj, u32 start, u32 end);
 
 extern int iopgtable_store_entry(struct iommu *obj, struct iotlb_entry *e);
 
-extern int iommu_set_da_range(struct iommu *obj, u32 start, u32 end);
 extern struct iommu *iommu_get(const char *name);
 extern void iommu_put(struct iommu *obj);
 extern int iommu_set_isr(const char *name,
