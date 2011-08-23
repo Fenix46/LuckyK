@@ -248,6 +248,10 @@ static int cpu_has_aliasing_icache(unsigned int arch)
 	int aliasing_icache;
 	unsigned int id_reg, num_sets, line_size;
 
+	/* PIPT caches never alias. */
+	if (icache_is_pipt())
+		return 0;
+
 	/* arch specifies the register format */
 	switch (arch) {
 	case CPU_ARCH_ARMv7:
@@ -281,8 +285,14 @@ static void __init cacheid_init(void)
 		if ((cachetype & (7 << 29)) == 4 << 29) {
 			/* ARMv7 register format */
 			cacheid = CACHEID_VIPT_NONALIASING;
-			if ((cachetype & (3 << 14)) == 1 << 14)
+			switch (cachetype & (3 << 14)) {
+			case (1 << 14):
 				cacheid |= CACHEID_ASID_TAGGED;
+				break;
+			case (3 << 14):
+				cacheid |= CACHEID_PIPT;
+				break;
+			}
 			else if (cpu_has_aliasing_icache(CPU_ARCH_ARMv7))
 				cacheid |= CACHEID_VIPT_I_ALIASING;
 		} else if (cachetype & (1 << 23)) {
@@ -299,10 +309,11 @@ static void __init cacheid_init(void)
 	printk("CPU: %s data cache, %s instruction cache\n",
 		cache_is_vivt() ? "VIVT" :
 		cache_is_vipt_aliasing() ? "VIPT aliasing" :
-		cache_is_vipt_nonaliasing() ? "VIPT nonaliasing" : "unknown",
+		cache_is_vipt_nonaliasing() ? "PIPT / VIPT nonaliasing" : "unknown",
 		cache_is_vivt() ? "VIVT" :
 		icache_is_vivt_asid_tagged() ? "VIVT ASID tagged" :
 		icache_is_vipt_aliasing() ? "VIPT aliasing" :
+		icache_is_pipt() ? "PIPT" :
 		cache_is_vipt_nonaliasing() ? "VIPT nonaliasing" : "unknown");
 }
 
