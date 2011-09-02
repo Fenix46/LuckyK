@@ -786,7 +786,7 @@ static void domain_flush_devices(struct protection_domain *domain)
 	struct iommu_dev_data *dev_data;
 
 	list_for_each_entry(dev_data, &domain->dev_list, list)
-		device_flush_dte(dev_data->dev);
+		device_flush_dte(dev_data);
 }
 
 /****************************************************************************
