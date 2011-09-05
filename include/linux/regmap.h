@@ -33,6 +33,12 @@ struct spi_device;
  *                     can be read from.
  * @volatile_register: Optional callback returning true if the register
  *                     value can't be cached.
+ *
+ * @read_flag_mask: Mask to be set in the top byte of the register when doing
+ *                  a read.
+ * @write_flag_mask: Mask to be set in the top byte of the register when doing
+ *                   a write. If both read_flag_mask and write_flag_mask are
+ *                   empty the regmap_bus default masks are used.
  */
 struct regmap_config {
 	int reg_bits;
@@ -42,6 +48,14 @@ struct regmap_config {
 	bool (*writeable_reg)(struct device *dev, unsigned int reg);
 	bool (*readable_reg)(struct device *dev, unsigned int reg);
 	bool (*volatile_reg)(struct device *dev, unsigned int reg);
+	bool (*precious_reg)(struct device *dev, unsigned int reg);
+
+	unsigned int max_register;
+	struct reg_default *reg_defaults;
+	int num_reg_defaults;
+
+	u8 read_flag_mask;
+	u8 write_flag_mask;
 };
 
 typedef int (*regmap_hw_write)(struct device *dev, const void *data,
