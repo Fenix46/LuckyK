@@ -33,6 +33,7 @@ struct omap_iommu {
 	void __iomem	*regbase;
 	struct device	*dev;
 	void		*isr_priv;
+	struct iommu_domain *domain;
 
 	unsigned int	refcount;
 	struct mutex	iommu_lock;	/* global for this whole object */
@@ -48,8 +49,6 @@ struct omap_iommu {
 
 	struct list_head	mmap;
 	struct mutex		mmap_lock; /* protect mmap */
-
-	int (*isr)(struct omap_iommu *obj, u32 da, u32 iommu_errs, void *priv);
 
 	void *ctx; /* iommu context: registres saved area */
 	u32 da_start;
