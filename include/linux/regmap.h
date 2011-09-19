@@ -20,6 +20,11 @@
 struct i2c_client;
 struct spi_device;
 
+/* An enum of all the supported cache types */
+enum regcache_type {
+	REGCACHE_NONE,
+};
+
 /**
  * Configuration for the register map of a device.
  *
@@ -39,6 +44,11 @@ struct spi_device;
  * @write_flag_mask: Mask to be set in the top byte of the register when doing
  *                   a write. If both read_flag_mask and write_flag_mask are
  *                   empty the regmap_bus default masks are used.
+ *
+ * @cache_type: The actual cache type.
+ * @reg_defaults_raw: Power on reset values for registers (for use with
+ *                    register cache support).
+ * @num_reg_defaults_raw: Number of elements in reg_defaults_raw.
  */
 struct regmap_config {
 	int reg_bits;
@@ -52,7 +62,10 @@ struct regmap_config {
 
 	unsigned int max_register;
 	struct reg_default *reg_defaults;
-	int num_reg_defaults;
+	unsigned int num_reg_defaults;
+	enum regcache_type cache_type;
+	const void *reg_defaults_raw;
+	unsigned int num_reg_defaults_raw;
 
 	u8 read_flag_mask;
 	u8 write_flag_mask;
