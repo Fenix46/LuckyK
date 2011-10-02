@@ -371,7 +371,7 @@ static void flush_iotlb_all(struct omap_iommu *obj)
 	iommu_write_reg(obj, 1, MMU_GFLUSH);
 }
 
-#if defined(CONFIG_OMAP_IOMMU_DEBUG_MODULE)
+#if defined(CONFIG_OMAP_IOMMU_DEBUG) || defined(CONFIG_OMAP_IOMMU_DEBUG_MODULE)
 
 ssize_t omap_iommu_dump_ctx(struct omap_iommu *obj, char *buf, ssize_t bytes)
 {
