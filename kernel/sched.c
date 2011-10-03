@@ -4567,18 +4567,6 @@ asmlinkage void __sched schedule(void)
 }
 EXPORT_SYMBOL(schedule);
 
-static inline void sched_submit_work(struct task_struct *tsk)
-{
-	if (!tsk->state)
-		return;
-	/*
-	 * If we are going to sleep and we have plugged IO queued,
-	 * make sure to submit it to avoid deadlocks.
-	 */
-	if (blk_needs_flush_plug(tsk))
-		blk_schedule_flush_plug(tsk);
-}
-
 #ifdef CONFIG_MUTEX_SPIN_ON_OWNER
 
 static inline bool owner_running(struct mutex *lock, struct task_struct *owner)
