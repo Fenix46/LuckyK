@@ -87,20 +87,24 @@ EXPORT_SYMBOL_GPL(omap_uninstall_iommu_arch);
 
 /**
  * omap_iommu_save_ctx - Save registers for pm off-mode support
- * @obj:	target iommu
+ * @dev:	client device
  **/
-void omap_iommu_save_ctx(struct omap_iommu *obj)
+void omap_iommu_save_ctx(struct device *dev)
 {
+	struct omap_iommu *obj = dev_to_omap_iommu(dev);
+
 	arch_iommu->save_ctx(obj);
 }
 EXPORT_SYMBOL_GPL(omap_iommu_save_ctx);
 
 /**
  * omap_iommu_restore_ctx - Restore registers for pm off-mode support
- * @obj:	target iommu
+ * @dev:	client device
  **/
-void omap_iommu_restore_ctx(struct omap_iommu *obj)
+void omap_iommu_restore_ctx(struct device *dev)
 {
+	struct omap_iommu *obj = dev_to_omap_iommu(dev);
+
 	arch_iommu->restore_ctx(obj);
 }
 EXPORT_SYMBOL_GPL(omap_iommu_restore_ctx);
@@ -834,13 +838,23 @@ static void _set_latency_cstr(struct iommu *obj, bool set)
 }
 
 /**
- * iommu_get - Get iommu handler
- * @name:	target iommu name
+ * omap_iommu_attach() - attach iommu device to an iommu domain
+ * @name:	name of target omap iommu device
+ * @iopgd:	page table
  **/
-static struct omap_iommu *omap_iommu_attach(struct device *dev, u32 *iopgd)
+static struct omap_iommu *omap_iommu_attach(const char *name, u32 *iopgd)
 {
 	int err = -ENOMEM;
-	struct omap_iommu *obj = to_iommu(dev);
+	struct device *dev;
+	struct omap_iommu *obj;
+
+	dev = driver_find_device(&omap_iommu_driver.driver, NULL,
+				(void *)name,
+				device_match_by_alias);
+	if (!dev)
+		return NULL;
+
+	obj = to_iommu(dev);
 
 	dev = driver_find_device(&omap_iommu_driver.driver, NULL, (void *)name,
 				 device_match_by_alias);
@@ -1087,6 +1101,7 @@ omap_iommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 {
 	struct omap_iommu_domain *omap_domain = domain->priv;
 	struct omap_iommu *oiommu;
+	struct omap_iommu_arch_data *arch_data = dev->archdata.iommu;
 	int ret = 0;
 
 	spin_lock(&omap_domain->lock);
@@ -1099,14 +1114,14 @@ omap_iommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 	}
 
 	/* get a handle to and enable the omap iommu */
-	oiommu = omap_iommu_attach(dev, omap_domain->pgtable);
+	oiommu = omap_iommu_attach(arch_data->name, omap_domain->pgtable);
 	if (IS_ERR(oiommu)) {
 		ret = PTR_ERR(oiommu);
 		dev_err(dev, "can't get omap iommu: %d\n", ret);
 		goto out;
 	}
 
-	omap_domain->iommu_dev = oiommu;
+	omap_domain->iommu_dev = arch_data->iommu_dev = oiommu;
 	oiommu->domain = domain;
 
 out:
@@ -1118,7 +1133,8 @@ static void omap_iommu_detach_dev(struct iommu_domain *domain,
 				 struct device *dev)
 {
 	struct omap_iommu_domain *omap_domain = domain->priv;
-	struct omap_iommu *oiommu = to_iommu(dev);
+	struct omap_iommu_arch_data *arch_data = dev->archdata.iommu;
+	struct omap_iommu *oiommu = dev_to_omap_iommu(dev);
 
 	spin_lock(&omap_domain->lock);
 
@@ -1132,7 +1148,7 @@ static void omap_iommu_detach_dev(struct iommu_domain *domain,
 
 	omap_iommu_detach(oiommu);
 
-	omap_domain->iommu_dev = NULL;
+	omap_domain->iommu_dev = arch_data->iommu_dev = NULL;
 
 out:
 	spin_unlock(&omap_domain->lock);

@@ -80,13 +80,6 @@
 #include "isph3a.h"
 #include "isphist.h"
 
-/*
- * this is provided as an interim solution until omap3isp doesn't need
- * any omap-specific iommu API
- */
-#define to_iommu(dev)							\
-	(struct omap_iommu *)platform_get_drvdata(to_platform_device(dev))
-
 static unsigned int autoidle;
 module_param(autoidle, int, 0444);
 MODULE_PARM_DESC(autoidle, "Enable OMAP3ISP AUTOIDLE support");
@@ -1114,8 +1107,7 @@ isp_restore_context(struct isp_device *isp, struct isp_reg *reg_list)
 static void isp_save_ctx(struct isp_device *isp)
 {
 	isp_save_context(isp, isp_reg_list);
-	if (isp->iommu)
-		omap_iommu_save_ctx(isp->iommu);
+	omap_iommu_save_ctx(isp->dev);
 }
 
 /*
@@ -1128,8 +1120,7 @@ static void isp_save_ctx(struct isp_device *isp)
 static void isp_restore_ctx(struct isp_device *isp)
 {
 	isp_restore_context(isp, isp_reg_list);
-	if (isp->iommu)
-		omap_iommu_restore_ctx(isp->iommu);
+	omap_iommu_restore_ctx(isp->dev);
 	omap3isp_ccdc_restore_context(isp);
 	omap3isp_preview_restore_context(isp);
 }
@@ -1983,6 +1974,8 @@ static int isp_remove(struct platform_device *pdev)
 
 	omap3isp_get(isp);
 	iommu_put(isp->iommu);
+	iommu_detach_device(isp->domain, &pdev->dev);
+	iommu_domain_free(isp->domain);
 	omap3isp_put(isp);
 
 	free_irq(isp->irq_num, isp);
@@ -2129,17 +2122,6 @@ static int isp_probe(struct platform_device *pdev)
 		}
 	}
 
-	/* IOMMU */
-	isp->iommu = iommu_get("isp");
-	if (IS_ERR_OR_NULL(isp->iommu)) {
-		isp->iommu = NULL;
-		ret = -ENODEV;
-		goto error_isp;
-	}
-
-	/* to be removed once iommu migration is complete */
-	isp->iommu = to_iommu(isp->iommu_dev);
-
 	isp->domain = iommu_domain_alloc(pdev->dev.bus);
 	if (!isp->domain) {
 		dev_err(isp->dev, "can't alloc iommu domain\n");
@@ -2147,7 +2129,7 @@ static int isp_probe(struct platform_device *pdev)
 		goto error_isp;
 	}
 
-	ret = iommu_attach_device(isp->domain, isp->iommu_dev);
+	ret = iommu_attach_device(isp->domain, &pdev->dev);
 	if (ret) {
 		dev_err(&pdev->dev, "can't attach iommu device: %d\n", ret);
 		goto free_domain;
@@ -2185,6 +2167,10 @@ error_modules:
 	isp_cleanup_modules(isp);
 error_irq:
 	free_irq(isp->irq_num, isp);
+detach_dev:
+	iommu_detach_device(isp->domain, &pdev->dev);
+free_domain:
+	iommu_domain_free(isp->domain);
 error_isp:
 	iommu_put(isp->iommu);
 	omap3isp_put(isp);
