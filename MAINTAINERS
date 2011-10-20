@@ -5324,6 +5324,13 @@ L:	reiserfs-devel@vger.kernel.org
 S:	Supported
 F:	fs/reiserfs/
 
+REMOTE PROCESSOR (REMOTEPROC) SUBSYSTEM
+M:	Ohad Ben-Cohen <ohad@wizery.com>
+S:	Maintained
+F:	drivers/remoteproc/
+F:	Documentation/remoteproc.txt
+F:	include/linux/remoteproc.txt
+
 RFKILL
 M:	Johannes Berg <johannes@sipsolutions.net>
 L:	linux-wireless@vger.kernel.org
