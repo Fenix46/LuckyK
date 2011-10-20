@@ -17,103 +17,75 @@
 
 #include <linux/kernel.h>
 #include <linux/err.h>
-#include <linux/slab.h>
 #include <linux/remoteproc.h>
-#include <linux/memblock.h>
+#include <linux/dma-contiguous.h>
+#include <linux/dma-mapping.h>
+
 #include <plat/omap_device.h>
 #include <plat/omap_hwmod.h>
 #include <plat/remoteproc.h>
-#include <plat/dsp.h>
-#include <plat/io.h>
-#include "cm2_44xx.h"
-#include "cm-regbits-44xx.h"
+#include <plat/iommu.h>
 
-#define OMAP4430_CM_M3_M3_CLKCTRL (OMAP4430_CM2_BASE + OMAP4430_CM2_CORE_INST \
-		+ OMAP4_CM_DUCATI_DUCATI_CLKCTRL_OFFSET)
+/*
+ * Temporarily define the CMA base address explicitly.
+ *
+ * This will go away as soon as we have the IOMMU-based generic
+ * DMA API in place.
+ */
+#define OMAP_RPROC_CMA_BASE	(0xa9800000)
 
-static struct omap_rproc_timers_info ipu_timers[] = {
-	{ .id = 3 },
-	{ .id = 4 },
-#ifdef CONFIG_REMOTEPROC_WATCHDOG
-	{ .id = 9 },
-	{ .id = 11 },
-#endif
-};
-
+/*
+ * These data structures define platform-specific information
+ * needed for each supported remote processor.
+ *
+ * At this point we only support the remote dual M3 "Ducati" imaging
+ * subsystem (aka "ipu"), but later on we'll also add support for the
+ * DSP ("Tesla").
+ */
 static struct omap_rproc_pdata omap4_rproc_data[] = {
 	{
-		.name		= "dsp",
-		.iommu_name	= "tesla",
-		.firmware	= "tesla-dsp.bin",
-		.oh_name	= "dsp_c0",
-		.clkdm_name	= "dsp_clkdm",
-	},
-	{
-		.name		= "ipu",
-		.iommu_name	= "ducati",
-		.firmware	= "ducati-m3.bin",
+		.name		= "ipu_c0",
+		.firmware	= "ducati-m3-core0.xem3",
+		.mbox_name	= "mailbox-1",
 		.oh_name	= "ipu_c0",
-		.oh_name_opt	= "ipu_c1",
-		.clkdm_name	= "ducati_clkdm",
-		.timers		= ipu_timers,
-		.timers_cnt	= ARRAY_SIZE(ipu_timers),
-		.idle_addr	= OMAP4430_CM_M3_M3_CLKCTRL,
-		.idle_mask	= OMAP4430_STBYST_MASK,
-		.suspend_addr	= 0xb3bf02d8,
-		.suspend_mask	= ~0,
-		.sus_timeout	= 5000,
-		.sus_mbox_name	= "mailbox-1",
 	},
+};
+
+static struct omap_iommu_arch_data omap4_rproc_iommu[] = {
+	{ .name = "ducati" },
 };
 
 static struct omap_device_pm_latency omap_rproc_latency[] = {
 	{
-		OMAP_RPROC_DEFAULT_PM_LATENCY,
+		.deactivate_func = omap_device_idle_hwmods,
+		.activate_func = omap_device_enable_hwmods,
+		.flags = OMAP_DEVICE_LATENCY_AUTO_ADJUST,
 	},
 };
 
-static struct rproc_mem_pool *omap_rproc_get_pool(const char *name)
+static struct platform_device omap4_ducati = {
+	.name	= "omap-rproc",
+	.id	= 1, /* reserve 0 for tesla. we respect. */
+};
+
+static struct platform_device *omap4_rproc_devs[] __initdata = {
+	&omap4_ducati,
+};
+
+void __init omap_rproc_reserve_cma(void)
 {
-	struct rproc_mem_pool *pool = NULL;
+	int ret;
 
-	/* check for ipu currently. dsp will be handled later */
-	if (!strcmp("ipu", name)) {
-		phys_addr_t paddr1 = omap_ipu_get_mempool_base(
-						OMAP_RPROC_MEMPOOL_STATIC);
-		phys_addr_t paddr2 = omap_ipu_get_mempool_base(
-						OMAP_RPROC_MEMPOOL_DYNAMIC);
-		u32 len1 = omap_ipu_get_mempool_size(OMAP_RPROC_MEMPOOL_STATIC);
-		u32 len2 = omap_ipu_get_mempool_size(OMAP_RPROC_MEMPOOL_DYNAMIC);
-
-		if (!paddr1 && !paddr2) {
-			pr_err("no carveout memory available at all for "
-				"remotproc\n");
-			return pool;
-		}
-		if (!paddr1 || !len1)
-			pr_warn("static memory is unavailable: 0x%x, 0x%x\n",
-				paddr1, len1);
-		if (!paddr2 || !len2)
-			pr_warn("carveout memory is unavailable: 0x%x, 0x%x\n",
-				paddr2, len2);
-
-		pool = kzalloc(sizeof(*pool), GFP_KERNEL);
-		if (pool) {
-			pool->st_base = paddr1;
-			pool->st_size = len1;
-			pool->mem_base = paddr2;
-			pool->mem_size = len2;
-			pool->cur_base = paddr2;
-			pool->cur_size = len2;
-		}
-	}
-
-	return pool;
+	/* reserve CMA memory for OMAP4's M3 "ducati" remote processor */
+	ret = dma_declare_contiguous(&omap4_ducati.dev,
+					CONFIG_OMAP_DUCATI_CMA_SIZE,
+					OMAP_RPROC_CMA_BASE, 0);
+	if (ret)
+		pr_err("dma_declare_contiguous failed %d\n", ret);
 }
 
 static int __init omap_rproc_init(void)
 {
-	const char *pdev_name = "omap-rproc";
 	struct omap_hwmod *oh[2];
 	struct omap_device *od;
 	int i, ret = 0, oh_count;
@@ -122,9 +94,11 @@ static int __init omap_rproc_init(void)
 	if (!cpu_is_omap44xx())
 		return 0;
 
+	/* build the remote proc devices */
 	for (i = 0; i < ARRAY_SIZE(omap4_rproc_data); i++) {
 		const char *oh_name = omap4_rproc_data[i].oh_name;
 		const char *oh_name_opt = omap4_rproc_data[i].oh_name_opt;
+		struct platform_device *pdev = omap4_rproc_devs[i];
 		oh_count = 0;
 
 		oh[0] = omap_hwmod_lookup(oh_name);
@@ -134,6 +108,11 @@ static int __init omap_rproc_init(void)
 		}
 		oh_count++;
 
+		/*
+		 * ipu might have a secondary hwmod entry (for configurations
+		 * where we want both M3 cores to be represented by a single
+		 * device).
+		 */
 		if (oh_name_opt) {
 			oh[1] = omap_hwmod_lookup(oh_name_opt);
 			if (!oh[1]) {
@@ -143,22 +122,46 @@ static int __init omap_rproc_init(void)
 			oh_count++;
 		}
 
-		omap4_rproc_data[i].memory_pool =
-				omap_rproc_get_pool(omap4_rproc_data[i].name);
-		od = omap_device_build_ss(pdev_name, i, oh, oh_count,
-					&omap4_rproc_data[i],
-					sizeof(struct omap_rproc_pdata),
+		omap4_rproc_data[i].device_enable = omap_device_enable;
+		omap4_rproc_data[i].device_shutdown = omap_device_shutdown;
+
+		device_initialize(&pdev->dev);
+
+		/* Set dev_name early to allow dev_xxx in omap_device_alloc */
+		dev_set_name(&pdev->dev, "%s.%d", pdev->name,  pdev->id);
+
+		od = omap_device_alloc(pdev, oh, oh_count,
 					omap_rproc_latency,
-					ARRAY_SIZE(omap_rproc_latency),
-					false);
-		if (IS_ERR(od)) {
-			pr_err("Could not build omap_device for %s:%s\n",
-							pdev_name, oh_name);
+					ARRAY_SIZE(omap_rproc_latency));
+		if (!od) {
+			dev_err(&pdev->dev, "omap_device_alloc failed\n");
+			put_device(&pdev->dev);
 			ret = PTR_ERR(od);
+			continue;
+		}
+
+		ret = platform_device_add_data(pdev,
+					&omap4_rproc_data[i],
+					sizeof(struct omap_rproc_pdata));
+		if (ret) {
+			dev_err(&pdev->dev, "can't add pdata\n");
+			omap_device_delete(od);
+			put_device(&pdev->dev);
+			continue;
+		}
+
+		/* attach the remote processor to its iommu device */
+		pdev->dev.archdata.iommu = &omap4_rproc_iommu[i];
+
+		ret = omap_device_register(pdev);
+		if (ret) {
+			dev_err(&pdev->dev, "omap_device_register failed\n");
+			omap_device_delete(od);
+			put_device(&pdev->dev);
+			continue;
 		}
 	}
 
 	return ret;
 }
-/* must be ready in time for device_initcall users */
-subsys_initcall(omap_rproc_init);
+device_initcall(omap_rproc_init);

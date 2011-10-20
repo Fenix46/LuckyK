@@ -66,8 +66,7 @@ void __init omap_reserve(void)
 {
 	omapfb_reserve_sdram_memblock();
 	omap_vram_reserve_sdram_memblock();
-	omap_dsp_reserve_sdram_memblock();
-	omap_ipu_reserve_sdram_memblock();
+	omap_rproc_reserve_cma();
 }
 
 void omap_init_ram_size(void)
