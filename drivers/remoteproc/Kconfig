@@ -6,6 +6,7 @@
 config REMOTE_PROC
 	tristate
 
+<<<<<<< HEAD
 config REMOTE_PROC_AUTOSUSPEND
 	bool "Autosuspend support for remoteproc"
 	depends on REMOTE_PROC
@@ -23,11 +24,13 @@ config REMOTE_PROC_AUTOSUSPEND_TIMEOUT
 	  autosuspend.
 
 # can't be tristate, due to omap_device_* and omap_hwmod_* dependency
-config OMAP_REMOTE_PROC
-	bool "OMAP remoteproc support"
+config OMAP_REMOTEPROC
+	tristate "OMAP remoteproc support"
 	depends on ARCH_OMAP4
 	select OMAP_IOMMU
-	select REMOTE_PROC
+	select REMOTEPROC
+	select OMAP_MBOX_FWK
+	select RPMSG
 	default y
 	help
 	  Say y here to support OMAP's remote processors (dual M3
@@ -40,7 +43,7 @@ config OMAP_REMOTE_PROC
 	  offloaded to remote DSP processors using this framework).
 
 	  It's safe to say n here if you're not interested in multimedia
-	  offloading or just want a bare minium kernel.
+	  offloading or just want a bare minimum kernel.
 
 config OMAP_RPRES
 	bool "Remote Processor Resources"
