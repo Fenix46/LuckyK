@@ -73,6 +73,7 @@ struct iommu_ops {
 	int (*domain_has_cap)(struct iommu_domain *domain,
 			      unsigned long cap);
 	unsigned long pgsize_bitmap;
+	int (*device_group)(struct device *dev, unsigned int *groupid);
 };
 
 extern int bus_set_iommu(struct bus_type *bus, struct iommu_ops *ops);
@@ -93,6 +94,7 @@ extern int iommu_domain_has_cap(struct iommu_domain *domain,
 				unsigned long cap);
 extern void iommu_set_fault_handler(struct iommu_domain *domain,
 					iommu_fault_handler_t handler);
+extern int iommu_device_group(struct device *dev, unsigned int *groupid);
 
 /**
  * report_iommu_fault() - report about an IOMMU fault to the IOMMU framework
@@ -191,6 +193,11 @@ static inline int domain_has_cap(struct iommu_domain *domain,
 static inline void iommu_set_fault_handler(struct iommu_domain *domain,
 					iommu_fault_handler_t handler)
 {
+}
+
+static inline int iommu_device_group(struct device *dev, unsigned int *groupid);
+{
+	return -ENODEV;
 }
 
 #endif /* CONFIG_IOMMU_API */
