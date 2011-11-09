@@ -874,7 +874,7 @@ done:
 				x86_pmu.put_event_constraints(cpuc, cpuc->event_list[i]);
 		}
 	}
-	return num ? -ENOSPC : 0;
+	return num ? -EINVAL : 0;
 }
 
 /*
@@ -893,7 +893,7 @@ static int collect_events(struct cpu_hw_events *cpuc, struct perf_event *leader,
 
 	if (is_x86_event(leader)) {
 		if (n >= max_count)
-			return -ENOSPC;
+			return -EINVAL;
 		cpuc->event_list[n] = leader;
 		n++;
 	}
@@ -906,7 +906,7 @@ static int collect_events(struct cpu_hw_events *cpuc, struct perf_event *leader,
 			continue;
 
 		if (n >= max_count)
-			return -ENOSPC;
+			return -EINVAL;
 
 		cpuc->event_list[n] = event;
 		n++;
@@ -1654,7 +1654,7 @@ static int validate_event(struct perf_event *event)
 	c = x86_pmu.get_event_constraints(fake_cpuc, event);
 
 	if (!c || !c->weight)
-		ret = -ENOSPC;
+		ret = -EINVAL;
 
 	if (x86_pmu.put_event_constraints)
 		x86_pmu.put_event_constraints(fake_cpuc, event);
@@ -1679,7 +1679,7 @@ static int validate_group(struct perf_event *event)
 {
 	struct perf_event *leader = event->group_leader;
 	struct cpu_hw_events *fake_cpuc;
-	int ret, n;
+	int ret = -EINVAL, n;
 
 	ret = -ENOMEM;
 	fake_cpuc = kmalloc(sizeof(*fake_cpuc), GFP_KERNEL | __GFP_ZERO);
