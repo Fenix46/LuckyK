@@ -428,13 +428,12 @@ static int map_iovm_area(struct iommu *obj, struct iovm_struct *new,
 		pgsz = bytes_to_iopgsz(bytes);
 		if (pgsz < 0)
 			goto err_out;
-		flags |= pgsz;
 
 		pr_debug("%s: [%d] %08x %08x(%x)\n", __func__,
 			 i, da, pa, bytes);
 
 		iotlb_init_entry(&e, da, pa, flags);
-		err = iopgtable_store_entry(obj, &e);
+		err = iommu_map(domain, da, pa, bytes, flags);
 		if (err)
 			goto err_out;
 
@@ -449,9 +448,10 @@ err_out:
 		size_t bytes;
 
 		bytes = sg->length + sg->offset;
-		order = get_order(bytes);
 
 		BUG_ON(!iopgsz_ok(bytes));
+		/* ignore failures.. we're already handling one */
+		iommu_unmap(domain, da, bytes);
 
 		da += bytes;
 	}
@@ -464,6 +464,10 @@ static void unmap_iovm_area(struct iommu_domain *domain, struct omap_iommu *obj,
 {
 	u32 start;
 	size_t total = area->da_end - area->da_start;
+	const struct sg_table *sgt = area->sgt;
+	struct scatterlist *sg;
+	int i;
+	size_t unmapped;
 
 	BUG_ON((!total) || !IS_ALIGNED(total, PAGE_SIZE));
 
@@ -471,13 +475,10 @@ static void unmap_iovm_area(struct iommu_domain *domain, struct omap_iommu *obj,
 	while (total > 0) {
 		size_t bytes;
 
-		int order;
-
 		bytes = sg->length + sg->offset;
-		order = get_order(bytes);
 
-		err = iommu_unmap(domain, start, order);
-		if (err < 0)
+		unmapped = iommu_unmap(domain, start, bytes);
+		if (unmapped < bytes)
 			break;
 
 		bytes = iopgtable_clear_entry(obj, start);
