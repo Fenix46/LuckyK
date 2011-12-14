@@ -1,12 +1,9 @@
-#
-# Generic framework for controlling remote processors
-#
+menu "Remoteproc drivers"
 
-# Remote proc gets selected by whoever wants it.
-config REMOTE_PROC
+# REMOTEPROC gets selected by whoever wants it
+config REMOTEPROC
 	tristate
 
-<<<<<<< HEAD
 config REMOTE_PROC_AUTOSUSPEND
 	bool "Autosuspend support for remoteproc"
 	depends on REMOTE_PROC
@@ -69,3 +66,4 @@ config REMOTEPROC_CORE_DUMP
           processor at <debugfs>/remoteproc/<remoteproc>/core.  Extracting the
 	  core dump does not pause the remote processor--this must be
 	  implemented separately.
+endmenu
