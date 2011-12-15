@@ -17,12 +17,31 @@
 #include <plat/omap_device.h>
 #include <plat/omap_hwmod.h>
 
-
-struct iommu_device {
-	resource_size_t base;
-	int irq;
-	struct iommu_platform_data pdata;
+static int __init omap_iommu_dev_init(struct omap_hwmod *oh, void *unused)
+{
+	struct platform_device *pdev;
 	struct resource res[2];
+	struct iommu_platform_data pdata;
+	struct omap_mmu_dev_attr *a = (struct omap_mmu_dev_attr *)oh->dev_attr;
+	static int i;
+
+	pdata.name = oh->name;
+	pdata.clk_name = oh->main_clk;
+	pdata.nr_tlb_entries = a->nr_tlb_entries;
+	pdata.da_start = a->da_start;
+	pdata.da_end = a->da_end;
+
+	pdev = omap_device_build("omap-iommu", i, oh, &pdata, sizeof(pdata),
+				NULL, 0, 0);
+	if (IS_ERR(pdev)) {
+		pr_err("%s: device build error: %ld\n",
+				__func__, PTR_ERR(pdev));
+		return PTR_ERR(pdev);
+	}
+
+	i++;
+
+	return 0;
 };
 static struct iommu_platform_data *devices_data;
 static int num_iommu_devices;
@@ -102,43 +121,10 @@ struct iommu_platform_data *iommu_get_device_data(void)
 
 static int __init omap_iommu_init(void)
 {
-	int i, ohl_cnt;
-	struct omap_hwmod *oh;
-	struct omap_device *od;
-	struct omap_device_pm_latency *ohl;
 
-	if (cpu_is_omap34xx()) {
-		devices_data = omap3_devices_data;
-		num_iommu_devices = NR_OMAP3_IOMMU_DEVICES;
-	} else if (cpu_is_omap44xx()) {
-		devices_data = omap4_devices_data;
-		num_iommu_devices = NR_OMAP4_IOMMU_DEVICES;
-	} else
-		return -ENODEV;
-
-	ohl = omap_iommu_latency;
-	ohl_cnt = ARRAY_SIZE(omap_iommu_latency);
-
-	for (i = 0; i < num_iommu_devices; i++) {
-		struct iommu_platform_data *data = &devices_data[i];
-
-		oh = omap_hwmod_lookup(data->oh_name);
-		if (!oh) {
-			pr_err("%s: could not look up %s\n", __func__,
-							data->oh_name);
-			continue;
-		}
-		data->io_base = oh->_mpu_rt_va;
-		data->irq = oh->mpu_irqs[0].irq;
-		od = omap_device_build("omap-iommu", i, oh,
-					data, sizeof(*data),
-					ohl, ohl_cnt, false);
-		WARN(IS_ERR(od), "Could not build omap_device"
-				"for %s %s\n", "omap-iommu", data->oh_name);
-	}
-	return 0;
+	return omap_hwmod_for_each_by_class("mmu", omap_iommu_dev_init, NULL);
 }
-module_init(omap_iommu_init);
+subsys_initcall(omap_iommu_init);
 
 MODULE_AUTHOR("Hiroshi DOYU");
 MODULE_AUTHOR("Hari Kanigeri");
