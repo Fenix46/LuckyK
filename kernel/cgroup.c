@@ -2208,8 +2208,8 @@ int cgroup_attach_proc(struct cgroup *cgrp, struct task_struct *leader)
 		if (tc->cgrp == cgrp)
 			continue;
 		/* get old css_set pointer */
-		task_lock(tc->task);
-		oldcg = tc->task->cgroups;
+		task_lock(tsk);
+		oldcg = tsk->cgroups;
 		get_css_set(oldcg);
 		task_unlock(tc->task);
 		/* see if the new one for us is already in the list? */
