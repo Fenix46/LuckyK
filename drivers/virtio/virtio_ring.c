@@ -21,6 +21,7 @@
 #include <linux/virtio_config.h>
 #include <linux/device.h>
 #include <linux/slab.h>
+#include <linux/hrtimer.h>
 
 /* virtio guest is communicating with a virtual "device" that actually runs on
  * a host processor.  Memory barriers are used to control SMP effects. */
@@ -107,6 +108,10 @@ struct vring_virtqueue
 #ifdef DEBUG
 	/* They're supposed to lock for us. */
 	unsigned int in_use;
+
+	/* Figure out if their kicks are too delayed. */
+	bool last_add_time_valid;
+	ktime_t last_add_time;
 #endif
 
 	/* Tokens for callbacks. */
@@ -203,6 +208,19 @@ int virtqueue_add_buf(struct virtqueue *_vq,
 	START_USE(vq);
 
 	BUG_ON(data == NULL);
+
+#ifdef DEBUG
+	{
+		ktime_t now = ktime_get();
+
+		/* No kick or get, with .1 second between?  Warn. */
+		if (vq->last_add_time_valid)
+			WARN_ON(ktime_to_ms(ktime_sub(now, vq->last_add_time))
+					    > 100);
+		vq->last_add_time = now;
+		vq->last_add_time_valid = true;
+	}
+#endif
 
 	/* If the host supports indirect descriptor tables, and we have multiple
 	 * buffers, then go indirect. FIXME: tune this threshold */
@@ -303,6 +321,14 @@ bool virtqueue_kick_prepare(struct virtqueue *_vq)
 	old = vq->vring.avail->idx - vq->num_added;
 	new = vq->vring.avail->idx;
 	vq->num_added = 0;
+
+#ifdef DEBUG
+	if (vq->last_add_time_valid) {
+		WARN_ON(ktime_to_ms(ktime_sub(ktime_get(),
+					      vq->last_add_time)) > 100);
+	}
+	vq->last_add_time_valid = false;
+#endif
 
 	if (vq->event) {
 		needs_kick = vring_need_event(vring_avail_event(&vq->vring),
@@ -448,6 +474,10 @@ void *virtqueue_get_buf(struct virtqueue *_vq, unsigned int *len)
 		vring_used_event(&vq->vring) = vq->last_used_idx;
 		virtio_mb(vq);
 	}
+
+#ifdef DEBUG
+	vq->last_add_time_valid = false;
+#endif
 
 	END_USE(vq);
 	return ret;
@@ -666,6 +696,7 @@ struct virtqueue *vring_new_virtqueue(unsigned int num,
 	list_add_tail(&vq->vq.list, &vdev->vqs);
 #ifdef DEBUG
 	vq->in_use = false;
+	vq->last_add_time_valid = false;
 #endif
 
 	vq->indirect = virtio_has_feature(vdev, VIRTIO_RING_F_INDIRECT_DESC);
