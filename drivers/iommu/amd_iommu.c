@@ -2822,6 +2822,9 @@ static unsigned device_dma_ops_init(void)
 
 	for_each_pci_dev(pdev) {
 		if (!check_device(&pdev->dev)) {
+
+			iommu_ignore_device(&pdev->dev);
+
 			unhandled += 1;
 			continue;
 		}
