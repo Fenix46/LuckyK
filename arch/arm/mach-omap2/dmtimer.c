@@ -175,6 +175,7 @@ static int __init omap_timer_init(struct omap_hwmod *oh, void *unused)
 
 err_free_mem:
 	kfree(pdata);
+
 end:
 	return ret;
 }
@@ -234,6 +235,15 @@ int __init omap2_system_timer_init(u8 id)
 	}
 	pdata->loses_context = pwrdm_can_ever_lose_context(pwrdm);
 
+	pwrdm = omap_hwmod_get_pwrdm(oh);
+	if (!pwrdm) {
+		pr_debug("%s: could not find pwrdm for (%s) in omap hwmod!\n",
+				__func__, oh->name);
+		ret = -EINVAL;
+		goto err_free_mem;
+	}
+	pdata->loses_context = pwrdm_can_ever_lose_context(pwrdm);
+
 	od = omap_device_build(name, id, oh, pdata, sizeof(*pdata),
 			omap2_dmtimer_latency,
 			ARRAY_SIZE(omap2_dmtimer_latency),
@@ -251,6 +261,7 @@ int __init omap2_system_timer_init(u8 id)
 
 err_free_mem:
 	kfree(pdata);
+
 end:
 	return ret;
 }
