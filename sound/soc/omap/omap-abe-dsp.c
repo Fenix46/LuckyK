@@ -2320,6 +2320,9 @@ static int aess_save_context(struct abe_data *abe)
 	abe_mute_gain(MIXVXREC, MIX_VXREC_INPUT_VX_UL);
 	abe_mute_gain(MIXECHO, MIX_ECHO_DL1);
 	abe_mute_gain(MIXECHO, MIX_ECHO_DL2);
+	abe_mute_gain(GAINS_DL1, GAIN_LEFT_OFFSET);
+	abe_mute_gain(GAINS_DL1, GAIN_RIGHT_OFFSET);
+	abe_mute_gain(MIXSDT, MIX_SDT_INPUT_DL1_MIXER);
 
 	/* mute gains associated with DL1 BE
 	 * ideally, these gains should be muted/saved when BE is muted, but
