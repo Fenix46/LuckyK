@@ -733,6 +733,11 @@ struct pmu {
 	 * if no implementation is provided it will default to: event->hw.idx + 1.
 	 */
 	int (*event_idx)		(struct perf_event *event); /*optional */
+
+	/*
+	 * flush branch stack on context-switches (needed in cpu-wide mode)
+	 */
+	void (*flush_branch_stack)	(void);
 };
 
 /**
@@ -963,6 +968,8 @@ struct perf_event_context {
 	u64				parent_gen;
 	u64				generation;
 	int				pin_count;
+	int				nr_cgroups;	 /* cgroup evts */
+	int				nr_branch_stack; /* branch_stack evt */
 	struct rcu_head			rcu_head;
 	int				nr_cgroups; /* cgroup events present */
 };
@@ -1027,6 +1034,7 @@ perf_event_create_kernel_counter(struct perf_event_attr *attr,
 				void *context);
 extern u64 perf_event_read_value(struct perf_event *event,
 				 u64 *enabled, u64 *running);
+
 
 struct perf_sample_data {
 	u64				type;

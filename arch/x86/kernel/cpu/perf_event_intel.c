@@ -1348,6 +1348,18 @@ static void intel_pmu_cpu_dying(int cpu)
 	fini_debug_store_on_cpu(cpu);
 }
 
+static void intel_pmu_flush_branch_stack(void)
+{
+	/*
+	 * Intel LBR does not tag entries with the
+	 * PID of the current task, then we need to
+	 * flush it on ctxsw
+	 * For now, we simply reset it
+	 */
+	if (x86_pmu.lbr_nr)
+		intel_pmu_lbr_reset();
+}
+
 static __initconst const struct x86_pmu intel_pmu = {
 	.name			= "Intel",
 	.handle_irq		= intel_pmu_handle_irq,
@@ -1374,6 +1386,8 @@ static __initconst const struct x86_pmu intel_pmu = {
 	.cpu_prepare		= intel_pmu_cpu_prepare,
 	.cpu_starting		= intel_pmu_cpu_starting,
 	.cpu_dying		= intel_pmu_cpu_dying,
+	.guest_get_msrs		= intel_guest_get_msrs,
+	.flush_branch_stack	= intel_pmu_flush_branch_stack,
 };
 
 static void intel_clovertown_quirks(void)
