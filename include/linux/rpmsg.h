@@ -72,6 +72,7 @@ enum {
 	VPROC_BUF_SZ,
 	VPROC_SIM_BASE,
 	VPROC_STATIC_CHANNELS,
+	VPROC_RPROC_REF,
 };
 
 #define RPMSG_ADDR_ANY		0xFFFFFFFF
@@ -150,6 +151,8 @@ void rpmsg_reset_all_devices(void);
 
 int
 rpmsg_send_offchannel_raw(struct rpmsg_channel *, u32, u32, void *, int, bool);
+
+struct rproc *rpmsg_get_rproc_handle(struct rpmsg_channel *);
 
 static inline
 int rpmsg_send_offchannel(struct rpmsg_channel *rpdev, u32 src, u32 dst,
