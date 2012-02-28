@@ -25,7 +25,7 @@ config REMOTE_PROC_AUTOSUSPEND_TIMEOUT
 config OMAP_REMOTEPROC
 	tristate "OMAP remoteproc support"
 	depends on ARCH_OMAP4
-	select OMAP_IOMMU
+	depends on OMAP_IOMMU
 	select REMOTEPROC
 	select OMAP_MBOX_FWK
 	select RPMSG
