@@ -574,6 +574,16 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 					msg, sizeof(*msg) + msg->len, true);
 #endif
 
+	/*
+	 * We currently use fixed-sized buffers, so trivially sanitize
+	 * the reported payload length.
+	 */
+	if (len > RPMSG_BUF_SIZE ||
+		msg->len > (len - sizeof(struct rpmsg_hdr))) {
+		dev_warn(dev, "inbound msg too big: (%d, %d)\n", len, msg->len);
+		return;
+	}
+
 	/* fetch the callback of the appropriate user */
 	spin_lock(&vrp->endpoints_lock);
 	ept = idr_find(&vrp->endpoints, msg->dst);
