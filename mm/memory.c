@@ -1383,7 +1383,6 @@ void unmap_vmas(struct mmu_gather *tlb,
 			} else
 				unmap_page_range(tlb, vma, start, end, details);
 		}
-		start = end;
 	}
 
 	mmu_notifier_invalidate_range_end(mm, start_addr, end_addr);
