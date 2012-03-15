@@ -1140,9 +1140,6 @@ static int iommu_setup_msi(struct amd_iommu *iommu)
 
 	iommu->int_enabled = true;
 
-	if (iommu->ppr_log != NULL)
-		iommu_feature_enable(iommu, CONTROL_PPFINT_EN);
-
 	return 0;
 }
 
@@ -1163,6 +1160,9 @@ static int iommu_init_msi(struct amd_iommu *iommu)
 
 enable_faults:
 	iommu_feature_enable(iommu, CONTROL_EVT_INT_EN);
+
+	if (iommu->ppr_log != NULL)
+		iommu_feature_enable(iommu, CONTROL_PPFINT_EN);
 
 	return 0;
 }
