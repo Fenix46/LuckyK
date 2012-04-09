@@ -59,7 +59,6 @@ static int lowmem_minfree_size = 4;
 
 static size_t lowmem_minfree_notif_trigger;
 
-static struct task_struct *lowmem_deathpending;
 static unsigned long lowmem_deathpending_timeout;
 static struct kobject *lowmem_kobj;
 
@@ -68,24 +67,6 @@ static struct kobject *lowmem_kobj;
 		if (lowmem_debug_level >= (level))	\
 			printk(x);			\
 	} while (0)
-
-static int
-task_notify_func(struct notifier_block *self, unsigned long val, void *data);
-
-static struct notifier_block task_nb = {
-	.notifier_call	= task_notify_func,
-};
-
-static int
-task_notify_func(struct notifier_block *self, unsigned long val, void *data)
-{
-	struct task_struct *task = data;
-
-	if (task == lowmem_deathpending)
-		lowmem_deathpending = NULL;
-
-	return NOTIFY_OK;
-}
 
 static void lowmem_notify_killzone_approach(void);
 
@@ -109,17 +90,6 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	int array_size = ARRAY_SIZE(lowmem_adj);
 	int other_free;
 	int other_file;
-
-	/*
-	 * If we already have a death outstanding, then
-	 * bail out right away; indicating to vmscan
-	 * that we have nothing further to offer on
-	 * this pass.
-	 *
-	 */
-	if (lowmem_deathpending &&
-	    time_before_eq(jiffies, lowmem_deathpending_timeout))
-		return 0;
 
 	get_free_ram(&other_free, &other_file);
 
@@ -166,6 +136,12 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		if (!p)
 			continue;
 
+		if (test_tsk_thread_flag(p, TIF_MEMDIE) &&
+		    time_before_eq(jiffies, lowmem_deathpending_timeout)) {
+			task_unlock(p);
+			rcu_read_unlock();
+			return 0;
+		}
 		oom_score_adj = p->signal->oom_score_adj;
 		if (oom_score_adj < min_score_adj) {
 			task_unlock(p);
@@ -192,9 +168,9 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		lowmem_print(1, "send sigkill to %d (%s), adj %d, size %d\n",
 			     selected->pid, selected->comm,
 			     selected_oom_score_adj, selected_tasksize);
-		lowmem_deathpending = selected;
 		lowmem_deathpending_timeout = jiffies + HZ;
 		send_sig(SIGKILL, selected, 0);
+		set_tsk_thread_flag(selected, TIF_MEMDIE);
 		rem -= selected_tasksize;
 	}
 	lowmem_print(4, "lowmem_shrink %lu, %x, return %d\n",
@@ -260,7 +236,6 @@ static struct kobj_type lowmem_kobj_type = {
 static int __init lowmem_init(void)
 {
 	int rc;
-	task_free_register(&task_nb);
 	register_shrinker(&lowmem_shrinker);
 
 	lowmem_kobj = kzalloc(sizeof(*lowmem_kobj), GFP_KERNEL);
@@ -291,7 +266,6 @@ static void __exit lowmem_exit(void)
 	kobject_put(lowmem_kobj);
 	kfree(lowmem_kobj);
 	unregister_shrinker(&lowmem_shrinker);
-	task_free_unregister(&task_nb);
 }
 
 module_param_named(cost, lowmem_shrinker.seeks, int, S_IRUGO | S_IWUSR);
