@@ -795,6 +795,10 @@ omap_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 
 	omap_i2c_unidle(dev);
 
+	r = pm_runtime_get_sync(dev->dev);
+	if (r < 0)
+		return r;
+
 	r = omap_i2c_wait_for_bb(dev);
 	if (r < 0)
 		r = omap_i2c_bus_clear(dev);
@@ -1228,8 +1232,10 @@ omap_i2c_probe(struct platform_device *pdev)
 		dev->regs = (u8 *) reg_map;
 
 	pm_runtime_enable(&pdev->dev);
-	pm_runtime_get_sync(&pdev->dev);
 	dev->idle = 0;
+	r = pm_runtime_get_sync(dev->dev);
+	if (r < 0)
+		goto err_free_mem;
 
 	dev->rev = omap_i2c_read_reg(dev, OMAP_I2C_REV_REG) & 0xff;
 
@@ -1338,12 +1344,16 @@ omap_i2c_remove(struct platform_device *pdev)
 {
 	struct omap_i2c_dev	*dev = platform_get_drvdata(pdev);
 	struct resource		*mem;
+	int ret;
 
 	platform_set_drvdata(pdev, NULL);
 
 	free_irq(dev->irq, dev);
 	i2c_del_adapter(&dev->adapter);
-	pm_runtime_get_sync(&pdev->dev);
+	ret = pm_runtime_get_sync(&pdev->dev);
+	if (ret < 0)
+		return ret;
+
 	omap_i2c_write_reg(dev, OMAP_I2C_CON_REG, 0);
 	pm_runtime_put(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
