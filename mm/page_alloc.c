@@ -655,10 +655,22 @@ static void free_pcppages_bulk(struct zone *zone, int count,
 			batch_free = to_free;
 
 		do {
+			int mt;
+
 			page = list_entry(list->prev, struct page, lru);
 			mt = get_pageblock_migratetype(page);
 			/* must delete as __free_one_page list manipulates */
 			list_del(&page->lru);
+
+			mt = page_private(page);
+			/*
+			 * cached MIGRATE_CMA pageblock type may have changed
+			 * during isolation
+			 */
+			if (is_migrate_cma(mt) &&
+			    get_pageblock_migratetype(page) == MIGRATE_ISOLATE)
+				mt = MIGRATE_ISOLATE;
+
 			/* MIGRATE_MOVABLE list may include MIGRATE_RESERVEs */
 			__free_one_page(page, zone, 0, page_private(page));
 			trace_mm_page_pcpu_drain(page, 0, page_private(page));
@@ -1426,6 +1438,7 @@ again:
 	if (likely(order == 0)) {
 		struct per_cpu_pages *pcp;
 		struct list_head *list;
+		int mt;
 
 		local_irq_save(flags);
 		pcp = &this_cpu_ptr(zone->pageset)->pcp;
@@ -1446,6 +1459,27 @@ again:
 
 		list_del(&page->lru);
 		pcp->count--;
+
+		spin_lock(&zone->lock);
+		mt = page_private(page);
+		/*
+		 * cached MIGRATE_CMA pageblock type may have changed
+		 * during isolation
+		 */
+		if ((is_migrate_cma(mt) &&
+		     get_pageblock_migratetype(page) == MIGRATE_ISOLATE) ||
+		    mt == MIGRATE_ISOLATE) {
+			mt = MIGRATE_ISOLATE;
+
+			zone->all_unreclaimable = 0;
+			zone->pages_scanned = 0;
+
+			__free_one_page(page, zone, 0, mt);
+			__mod_zone_page_state(zone, NR_FREE_PAGES, 1);
+			spin_unlock(&zone->lock);
+			goto again;
+		} else
+			spin_unlock(&zone->lock);
 	} else {
 		if (unlikely(gfp_flags & __GFP_NOFAIL)) {
 			/*
