@@ -131,7 +131,8 @@ static pte_t **consistent_pte;
 
 #define DEFAULT_CONSISTENT_DMA_SIZE SZ_2M
 
-unsigned long consistent_base = CONSISTENT_END - DEFAULT_CONSISTENT_DMA_SIZE;
+static unsigned long consistent_base = CONSISTENT_END -
+					DEFAULT_CONSISTENT_DMA_SIZE;
 
 void __init init_consistent_dma_size(unsigned long size)
 {
@@ -211,7 +212,6 @@ static int __init consistent_init(void)
 
 	return ret;
 }
-
 core_initcall(consistent_init);
 
 static void *
