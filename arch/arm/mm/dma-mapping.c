@@ -351,7 +351,8 @@ __dma_alloc(struct device *dev, size_t size, dma_addr_t *handle, gfp_t gfp,
 		return NULL;
 
 	if (!arch_is_coherent())
-		addr = __dma_alloc_remap(page, size, gfp, prot, caller);
+		addr = __dma_alloc_remap(page, size, 
+                                     gfp, prot, caller);
 	else
 		addr = page_address(page);
 

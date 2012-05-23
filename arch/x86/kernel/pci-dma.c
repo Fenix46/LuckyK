@@ -96,7 +96,8 @@ void *dma_generic_alloc_coherent(struct device *dev, size_t size,
 
 	flag |= __GFP_ZERO;
 again:
-	page = alloc_pages_node(dev_to_node(dev), flag, get_order(size));
+	page = alloc_pages_node(dev_to_node(dev), 
+                                flag, get_order(size));
 	if (!page)
 		return NULL;
 
