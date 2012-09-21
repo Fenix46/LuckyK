@@ -273,4 +273,9 @@ config MPILIB
 	  It is used to implement RSA digital signature verification,
 	  which is used by IMA/EVM digital signature extension.
 
+config OID_REGISTRY
+	tristate
+	help
+	  Enable fast lookup object identifier registry.
+
 endmenu
