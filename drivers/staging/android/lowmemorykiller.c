@@ -39,6 +39,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/sysfs.h>
+#include <linux/swap.h>
 #include <linux/rcupdate.h>
 
 static uint32_t lowmem_debug_level = 2;
@@ -88,8 +89,9 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	int selected_tasksize = 0;
 	int selected_oom_score_adj;
 	int array_size = ARRAY_SIZE(lowmem_adj);
-	int other_free;
-	int other_file;
+	int other_free = global_page_state(NR_FREE_PAGES) - totalreserve_pages;
+	int other_file = global_page_state(NR_FILE_PAGES) -
+						global_page_state(NR_SHMEM);
 
 	get_free_ram(&other_free, &other_file);
 
