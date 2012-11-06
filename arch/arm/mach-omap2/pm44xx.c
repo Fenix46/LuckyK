@@ -1422,4 +1422,4 @@ static int __init omap4_pm_init(void)
 err2:
 	return ret;
 }
-late_initcall(omap4_pm_init);
+arch_initcall(omap4_pm_init);
