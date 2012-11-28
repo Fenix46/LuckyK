@@ -122,7 +122,7 @@ void __init omap4_register_ion(void)
 	platform_device_register(&omap4_ion_device);
 }
 
-void __init omap_ion_init(void)
+void __init omap4_ion_init(void)
 {
 	int i, ret = 0;
 #ifndef CONFIG_ION_OMAP_TILER_DYNAMIC_ALLOC
