@@ -17,7 +17,6 @@
 #ifndef _ION_PRIV_H
 #define _ION_PRIV_H
 
-#include <linux/ion.h>
 #include <linux/kref.h>
 #include <linux/mm_types.h>
 #include <linux/mutex.h>
@@ -39,6 +38,8 @@ struct ion_kernel_mapping {
 	struct kref ref;
 	void *vaddr;
 };
+
+#include "ion.h"
 
 struct ion_buffer *ion_handle_buffer(struct ion_handle *handle);
 
