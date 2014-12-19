@@ -175,6 +175,16 @@ int omap_ion_share_fd_to_buffers(int fd, struct ion_buffer **buffers,
 	if (!handles)
 		return -ENOMEM;
 
+#ifdef CONFIG_PVR_SGX
+	if (*num_handles == 2) {
+		PVRSRVExportFDToIONHandles(fd, &client, handles, num_handles);
+	} else if (*num_handles == 1) {
+		handles[0] = PVRSRVExportFDToIONHandle(fd, &client);
+	} else {
+		ret = -EINVAL;
+		goto exit;
+	}
+#else
 	if (export_fd_to_ion_handles) {
 		export_fd_to_ion_handles(fd,
 				&client,
