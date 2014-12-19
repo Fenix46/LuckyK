@@ -191,7 +191,6 @@ int omap_ion_share_fd_to_handles(int fd, struct ion_client *client,
 			  GFP_KERNEL);
 	if (!export_handles)
 		return -ENOMEM;
-
 	if (export_fd_to_ion_handles) {
 		ret = export_fd_to_ion_handles(fd,
 				&export_client,
