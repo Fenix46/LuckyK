@@ -1378,6 +1378,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 			list_add_tail(&p->sibling, &p->real_parent->children);
 			list_add_tail_rcu(&p->tasks, &init_task.tasks);
 			__this_cpu_inc(process_counts);
+                } else {
 			list_add_tail_rcu(&p->thread_node,
 					  &p->signal->thread_head);
 		}
