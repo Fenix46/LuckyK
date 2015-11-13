@@ -352,7 +352,7 @@ long rpmsg_omx_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				_IOC_NR(cmd), ret);
 			return -EFAULT;
 		}
-		data.handle = ion_import_fd(omx->ion_client, data.fd);
+		data.handle = ion_import_dma_buf(omx->ion_client, data.fd);
 		if (IS_ERR_OR_NULL(data.handle))
 			data.handle = NULL;
 		if (copy_to_user((char __user *) arg, &data, sizeof(data))) {
@@ -391,7 +391,7 @@ long rpmsg_omx_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				struct ion_handle *handle = NULL;
 
 				if (!IS_ERR_OR_NULL(ion_bufs[i]))
-					handle = ion_import(omx->ion_client,
+					handle = ion_import_dma_buf(omx->ion_client,
 							   ion_bufs[i]);
 				if (!IS_ERR_OR_NULL(handle))
 					data.handles[i] = handle;

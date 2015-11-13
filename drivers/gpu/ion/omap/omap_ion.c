@@ -217,7 +217,7 @@ int omap_ion_share_fd_to_buffers(int fd, struct ion_buffer **buffers,
 #endif
 	for (i = 0; i < *num_handles; i++) {
 		if (handles[i])
-			buffers[i] = ion_share(client, handles[i]);
+			buffers[i] = ion_share_dma_buf_fd(client, handles[i]);
 	}
 
 exit:
