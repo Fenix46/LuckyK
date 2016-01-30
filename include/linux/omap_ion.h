@@ -73,6 +73,10 @@ struct ion_platform_heap * omap_ion_get2d_heap(void);
 int omap_tiler_vinfo(struct ion_client *client,
 			struct ion_handle *handle, unsigned int *vstride,
 			unsigned int *vsize);
+bool omap_ion_ipu_allocate_memory(void);
+bool omap_ion_ipu_free_memory(void);
+bool omap_ion_rpmsg_allocate_memory(void);
+bool omap_ion_rpmsg_free_memory(void);
 #endif /* __KERNEL__ */
 
 /* additional heaps used only on omap */
