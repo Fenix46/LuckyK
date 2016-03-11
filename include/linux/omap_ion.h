@@ -39,8 +39,24 @@ struct omap_ion_tiler_alloc_data {
 	struct ion_handle *handle;
 	size_t stride;
 	size_t offset;
-	u32 out_align;
-	u32 token;
+	uint32_t out_align;
+	uint32_t token;
+};
+
+/**
+ * struct omap_ion_phys_data - metadata passed from userspace to
+ * get physical address
+ *
+ * @handle:	the handle
+ * @phys_addr:	physical address of the buffer refered in handle
+ * @size:	size of the buffer
+ *
+ * Provided by userspace as an argument to the ioctl
+ */
+struct omap_ion_phys_addr_data {
+	struct ion_handle *handle;
+	unsigned long phys_addr;
+	size_t size;
 };
 
 #ifdef __KERNEL__
@@ -54,25 +70,31 @@ int omap_tiler_pages(struct ion_client *client, struct ion_handle *handle,
 int omap_ion_fd_to_handles(int fd, struct ion_client **client,
 		struct ion_handle **handles,
 		int *num_handles);
+struct ion_platform_heap * omap_ion_get2d_heap(void);
 int omap_tiler_vinfo(struct ion_client *client,
 			struct ion_handle *handle, unsigned int *vstride,
 			unsigned int *vsize);
-int omap_ion_share_fd_to_buffers(int fd, struct ion_buffer **buffers,
-					int *num_handles);
+int omap_ion_share_fd_to_fds(int fd, int *shared_fds, int *num_shared_fds);
 
 extern struct ion_device *omap_ion_device;
 #endif /* __KERNEL__ */
 
 /* additional heaps used only on omap */
 enum {
-	OMAP_ION_HEAP_TYPE_TILER = ION_HEAP_TYPE_CUSTOM + 1,
-	OMAP_ION_HEAP_TYPE_TILER_RESERVATION,
+	OMAP_ION_HEAP_SYSTEM = ION_HEAP_TYPE_CUSTOM + 1,
+	OMAP_ION_HEAP_SECURE_INPUT,
+	OMAP_ION_HEAP_TILER,
+	OMAP_ION_HEAP_NONSECURE_TILER,
+	OMAP_ION_HEAP_TILER_RESERVATION,
 };
 
-#define OMAP_ION_HEAP_TILER_MASK (1 << OMAP_ION_HEAP_TYPE_TILER)
+#define OMAP_ION_HEAP_TILER_MASK (1 << OMAP_ION_HEAP_TILER)
+#define OMAP_ION_HEAP_NONSECURE_TILER_MASK (1 << OMAP_ION_HEAP_NONSECURE_TILER)
+#define OMAP_ION_HEAP_TILER_RESERVATION_MASK (1 << OMAP_ION_HEAP_TILER_RESERVATION)
 
 enum {
 	OMAP_ION_TILER_ALLOC,
+	OMAP_ION_PHYS_ADDR,
 };
 
 /**
@@ -85,17 +107,6 @@ enum {
 	TILER_PIXEL_FMT_32BIT = 2,
 	TILER_PIXEL_FMT_PAGE  = 3,
 	TILER_PIXEL_FMT_MAX   = 3
-};
-
-/**
- * List of heaps in the system
- */
-enum {
-	OMAP_ION_HEAP_SYSTEM,
-	OMAP_ION_HEAP_TILER,
-	OMAP_ION_HEAP_SECURE_INPUT,
-	OMAP_ION_HEAP_NONSECURE_TILER,
-	OMAP_ION_HEAP_TILER_RESERVATION,
 };
 
 #endif /* _LINUX_ION_H */

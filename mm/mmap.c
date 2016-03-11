@@ -1233,6 +1233,11 @@ static inline int accountable_mapping(struct file *file, vm_flags_t vm_flags)
 	return (vm_flags & (VM_NORESERVE | VM_SHARED | VM_WRITE)) == VM_WRITE;
 }
 
+static int pageinfo_stack_mapping[4];
+static int pageinfo_fixed_32bit_mapping[4];
+static int pageinfo_32bit_mapping[4];
+static int pageinfo_fixed_mapping[4];
+
 unsigned long mmap_region(struct file *file, unsigned long addr,
 			  unsigned long len, unsigned long flags,
 			  vm_flags_t vm_flags, unsigned long pgoff)
@@ -1342,6 +1347,16 @@ munmap_back:
 		error = shmem_zero_setup(vma);
 		if (error)
 			goto free_vma;
+#ifdef CONFIG_TRAPZ_PVA
+	} else if (flags & MAP_STACK) {
+		vma->vm_private_data = (void *)pageinfo_stack_mapping;
+	} else if (flags & 0x40 && flags & MAP_FIXED) {
+		vma->vm_private_data = (void *)pageinfo_fixed_32bit_mapping;
+	} else if (flags & 0x40) {
+		vma->vm_private_data = (void *)pageinfo_32bit_mapping;
+	} else if (flags & MAP_FIXED) {
+		vma->vm_private_data = (void *)pageinfo_fixed_mapping;
+#endif
 	}
 
 	if (vma_wants_writenotify(vma)) {
@@ -2322,7 +2337,8 @@ void exit_mmap(struct mm_struct *mm)
 	while (vma)
 		vma = remove_vma(vma);
 
-	BUG_ON(mm->nr_ptes > (FIRST_USER_ADDRESS+PMD_SIZE-1)>>PMD_SHIFT);
+	/* SOHO-4653, change BUG_ON to WARN_ON */
+	WARN_ON(mm->nr_ptes > (FIRST_USER_ADDRESS+PMD_SIZE-1)>>PMD_SHIFT);
 }
 
 /* Insert vm structure into process list sorted by address

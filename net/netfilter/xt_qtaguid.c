@@ -20,6 +20,7 @@
 #include <linux/netfilter/x_tables.h>
 #include <linux/netfilter/xt_qtaguid.h>
 #include <linux/skbuff.h>
+#include <linux/ratelimit.h>
 #include <linux/workqueue.h>
 #include <net/addrconf.h>
 #include <net/sock.h>
@@ -1410,8 +1411,8 @@ static void if_tag_stat_update(const char *ifname, uid_t uid,
 
 	iface_entry = get_iface_entry(ifname);
 	if (!iface_entry) {
-		pr_err("qtaguid: iface_stat: stat_update() %s not found\n",
-		       ifname);
+		pr_err_ratelimited("qtaguid: iface_stat: stat_update() "
+				   "%s not found\n", ifname);
 		return;
 	}
 	/* It is ok to process data when an iface_entry is inactive */
@@ -2751,7 +2752,7 @@ static int qtudev_open(struct inode *inode, struct file *file)
 	utd_entry = get_uid_data(current_fsuid(), &utd_entry_found);
 	if (IS_ERR_OR_NULL(utd_entry)) {
 		res = PTR_ERR(utd_entry);
-		goto err;
+		goto err_unlock;
 	}
 
 	/* Look for existing PID based proc_data */
@@ -2793,8 +2794,8 @@ err_unlock_free_utd:
 		rb_erase(&utd_entry->node, &uid_tag_data_tree);
 		kfree(utd_entry);
 	}
+err_unlock:
 	spin_unlock_bh(&uid_tag_data_tree_lock);
-err:
 	return res;
 }
 

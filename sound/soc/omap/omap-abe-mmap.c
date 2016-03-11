@@ -171,6 +171,11 @@ static int aess_hw_params(struct snd_pcm_substream *substream,
 		goto out;
 
 	format.f = params_rate(params);
+	if(format.f == 44100) {
+		dev_dbg(dai->dev, "%s: %s - set event generator at 44.1kHz\n",
+		__func__, dai->name);
+		omap_aess_write_event_generator(abe->aess, EVENT_44100);
+	}
 	if (params_format(params) == SNDRV_PCM_FORMAT_S32_LE)
 		format.samp_format = STEREO_MSB;
 	else
@@ -247,6 +252,7 @@ static int aess_close(struct snd_pcm_substream *substream)
 		 * if ABE is still active */
 		abe_opp_recalc_level(abe);
 	}
+	synchronize_irq(abe->irq);
 	omap_abe_pm_runtime_put_sync(abe);
 
 	mutex_unlock(&abe->mutex);

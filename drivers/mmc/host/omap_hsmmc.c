@@ -43,6 +43,7 @@
 #include <plat/board.h>
 #include <plat/mmc.h>
 #include <plat/cpu.h>
+#include <linux/trapz.h> /* ACOS_MOD_ONELINE */
 
 #define OMAP_V1V8_SIGEN_V1V8	(1 << 19)
 
@@ -200,15 +201,10 @@
  * MMC Host controller read/write API's
  */
 #define OMAP_HSMMC_READ(base, reg)	\
-	__raw_readl((base) + OMAP_HSMMC_##reg)
+	readl((base) + OMAP_HSMMC_##reg)
 
 #define OMAP_HSMMC_WRITE(base, reg, val) \
-	__raw_writel((val), (base) + OMAP_HSMMC_##reg)
-
-struct omap_hsmmc_next {
-	unsigned int	dma_len;
-	s32		cookie;
-};
+	writel((val), (base) + OMAP_HSMMC_##reg)
 
 struct adma_desc_table {
 	u16 attr;
@@ -237,7 +233,6 @@ struct omap_hsmmc_host {
 	resource_size_t		mapbase;
 	spinlock_t		irq_lock; /* Prevent races with irq handler */
 	struct completion	buf_ready;
-	unsigned int		dma_len;
 	unsigned int		dma_sg_idx;
 	unsigned char		bus_mode;
 	unsigned char		power_mode;
@@ -250,7 +245,6 @@ struct omap_hsmmc_host {
 	dma_addr_t		phy_adma_table;
 	int			dma_line_tx, dma_line_rx;
 	int			slot_id;
-	int			got_dbclk;
 	int			response_busy;
 	int			context_loss;
 	int			vdd;
@@ -258,6 +252,7 @@ struct omap_hsmmc_host {
 	int			reqs_blocked;
 	int			use_reg;
 	int			req_in_progress;
+	unsigned long		req_ts;
 	unsigned int		flags;
 	unsigned int		errata;
 	int			regulator_enabled;
@@ -265,7 +260,8 @@ struct omap_hsmmc_host {
 	int			tuning_fsrc;
 	u32			tuning_uhsmc;
 	u32			tuning_opcode;
-	struct omap_hsmmc_next	next_data;
+
+	int			mapped_data_cnt;
 
 	struct	omap_mmc_platform_data	*pdata;
 };
@@ -275,6 +271,33 @@ static u32 ref_tuning[16] = { 0x00FF0FFF, 0xCCC3CCFF, 0xFFCC3CC3, 0xEFFEFFFE,
 				0xF0FFF0FF, 0x3CCCFC0F, 0xCFCC33CC, 0xEEFFEFFF,
 				0xFDFFFDFF, 0xFFBFFFDF, 0xFFF7FFBB, 0xDE7B7FF7,
 				};
+
+static int
+omap_hsmmc_prepare_data(struct omap_hsmmc_host *host, struct mmc_request *req);
+
+static void omap_hsmmc_status_notify_cb(int card_present, void *dev_id)
+{
+	struct omap_hsmmc_host *host = (struct omap_hsmmc_host *)dev_id;
+	unsigned int status, oldstat;
+
+	pr_debug("%s: card_present %d\n", mmc_hostname(host->mmc),
+		card_present);
+
+	if (!mmc_slot(host).mmc_data.status) {
+		mmc_detect_change(host->mmc, 0);
+		return;
+	}
+
+	status = mmc_slot(host).mmc_data.status(mmc_dev(host->mmc));
+
+	oldstat = mmc_slot(host).mmc_data.card_present;
+	mmc_slot(host).mmc_data.card_present = status;
+	if (status ^ oldstat) {
+		pr_debug("%s: Slot status change detected (%d -> %d)\n",
+			mmc_hostname(host->mmc), oldstat, status);
+		mmc_detect_change(host->mmc, 0);
+	}
+}
 
 static inline int omap_hsmmc_set_dll(struct omap_hsmmc_host *host, int count)
 {
@@ -603,10 +626,13 @@ static void omap_hsmmc_enable_irq(struct omap_hsmmc_host *host,
 		irq_mask = INT_EN_MASK;
 
 	/* Disable timeout for erases */
-	if (cmd->opcode == MMC_ERASE)
+	if (cmd->opcode == MMC_ERASE
+#ifdef CONFIG_LAB126_DIAG_MODE
+		|| cmd->opcode == MMC_SWITCH
+#endif
+		)
 		irq_mask &= ~DTO_ENABLE;
 
-	OMAP_HSMMC_WRITE(host->base, STAT, STAT_CLEAR);
 	OMAP_HSMMC_WRITE(host->base, ISE, irq_mask);
 	OMAP_HSMMC_WRITE(host->base, IE, irq_mask);
 }
@@ -777,6 +803,18 @@ static int omap_hsmmc_context_restore(struct omap_hsmmc_host *host)
 	if (host->context_loss == context_loss)
 		return 1;
 
+	timeout = 100;
+	while (!(OMAP_HSMMC_READ(host->base, SYSSTATUS) & RESETDONE)) {
+		udelay(1);
+		if (!timeout--)
+			break;
+	}
+
+	if (!(OMAP_HSMMC_READ(host->base, SYSSTATUS) & RESETDONE)) {
+		dev_err(mmc_dev(host->mmc), "Register MMC_SYSSTATUS is zero");
+		return -EBUSY;
+	}
+
 	if (host->pdata->controller_flags & OMAP_HSMMC_SUPPORTS_DUAL_VOLT) {
 		if (host->power_mode != MMC_POWER_OFF &&
 		    (ios->signal_voltage == MMC_SIGNAL_VOLTAGE_180))
@@ -944,9 +982,22 @@ static DEVICE_ATTR(slot_name, S_IRUGO, omap_hsmmc_show_slot_name, NULL);
  */
 static void
 omap_hsmmc_start_command(struct omap_hsmmc_host *host, struct mmc_command *cmd,
-	struct mmc_data *data)
+	struct mmc_data *data, bool no_auto_cmd12)
 {
 	int cmdreg = 0, resptype = 0, cmdtype = 0;
+	int blocks = 0;
+
+	if (data)
+		blocks = data->blocks;
+
+	/* ACOS_MOD_BEGIN */
+	TRAPZ_DESCRIBE(TRAPZ_KERN_MMC, omap_hsmmc_start_command,
+			"MMC start device command");
+	TRAPZ_LOG_PRINTF(TRAPZ_LOG_DEBUG, 0, TRAPZ_KERN_MMC,
+			omap_hsmmc_start_command,
+			"CMD%d; argument=0x%08x",
+			cmd->opcode, cmd->arg, host->mmc->index, blocks);
+	/* ACOS_MOD_END */
 
 	dev_dbg(mmc_dev(host->mmc), "%s: CMD%d, argument 0x%08x\n",
 		mmc_hostname(host->mmc), cmd->opcode, cmd->arg);
@@ -974,7 +1025,8 @@ omap_hsmmc_start_command(struct omap_hsmmc_host *host, struct mmc_command *cmd,
 		cmdtype = 0x3;
 
 	cmdreg = (cmd->opcode << 24) | (resptype << 16) | (cmdtype << 22);
-	if ((host->flags & AUTO_CMD12) && mmc_op_multi(cmd->opcode))
+	if ((host->flags & AUTO_CMD12) &&
+			mmc_op_multi(cmd->opcode) && !no_auto_cmd12)
 		cmdreg |= ACEN_ACMD12;
 
 	if (data) {
@@ -998,6 +1050,9 @@ omap_hsmmc_start_command(struct omap_hsmmc_host *host, struct mmc_command *cmd,
 
 	OMAP_HSMMC_WRITE(host->base, ARG, cmd->arg);
 	OMAP_HSMMC_WRITE(host->base, CMD, cmdreg);
+	if (cmd->opcode <= 10)
+		printk(KERN_DEBUG "MMC%d: cmd=%d arg=%08X\n",
+				host->mmc->index, cmd->opcode, cmd->arg);
 }
 
 static int
@@ -1012,11 +1067,13 @@ omap_hsmmc_get_dma_dir(struct omap_hsmmc_host *host, struct mmc_data *data)
 static void omap_hsmmc_request_done(struct omap_hsmmc_host *host, struct mmc_request *mrq)
 {
 	int dma_ch;
+	unsigned long flags;
 
-	spin_lock(&host->irq_lock);
+	spin_lock_irqsave(&host->irq_lock, flags);
 	host->req_in_progress = 0;
+	host->req_ts = jiffies;
 	dma_ch = host->dma_ch;
-	spin_unlock(&host->irq_lock);
+	spin_unlock_irqrestore(&host->irq_lock, flags);
 
 	omap_hsmmc_disable_irq(host);
 	/* Do not complete the request if DMA is still in progress */
@@ -1024,6 +1081,46 @@ static void omap_hsmmc_request_done(struct omap_hsmmc_host *host, struct mmc_req
 		return;
 	host->mrq = NULL;
 	mmc_request_done(host->mmc, mrq);
+}
+
+static int
+omap_hsmmc_map_data(struct omap_hsmmc_host *host, struct mmc_data *data)
+{
+	int dma_len = 0;
+	unsigned long flags;
+	spin_lock_irqsave(&host->irq_lock, flags);
+	if (data)
+		dma_len = data->dma_len;
+	if (data && !dma_len) {
+		dma_len = dma_map_sg(mmc_dev(host->mmc), data->sg,
+				     data->sg_len,
+				     omap_hsmmc_get_dma_dir(host, data));
+		data->dma_len = dma_len;
+		if (dma_len)
+			host->mapped_data_cnt++;
+	}
+	spin_unlock_irqrestore(&host->irq_lock, flags);
+	WARN(host->mapped_data_cnt < 0 || host->mapped_data_cnt > 2,
+		"MMC%d: Mapped Data count: %d",
+		host->mmc->index, host->mapped_data_cnt);
+	return dma_len  > 0 ? 0 : -EINVAL;
+}
+
+static void
+omap_hsmmc_unmap_data(struct omap_hsmmc_host *host, struct mmc_data *data)
+{
+	unsigned long flags;
+	spin_lock_irqsave(&host->irq_lock, flags);
+	if (data && data->dma_len) {
+		dma_unmap_sg(mmc_dev(host->mmc), data->sg, data->sg_len,
+				omap_hsmmc_get_dma_dir(host, data));
+		data->dma_len = 0;
+		host->mapped_data_cnt--;
+	}
+	spin_unlock_irqrestore(&host->irq_lock, flags);
+	WARN(host->mapped_data_cnt < 0 || host->mapped_data_cnt > 2,
+		"MMC%d: Mapped Data count: %d",
+		host->mmc->index, host->mapped_data_cnt);
 }
 
 /*
@@ -1035,9 +1132,12 @@ omap_hsmmc_xfer_done(struct omap_hsmmc_host *host, struct mmc_data *data)
 	if (!data) {
 		struct mmc_request *mrq = host->mrq;
 
-		/* TC before CC from CMD6 - don't know why, but it happens */
-		if (host->cmd && host->cmd->opcode == 6 &&
-		    host->response_busy) {
+		/* some commands generate busy on DATx, but do not
+		 * transfer data. Transition from on DATA bus from
+		 * busy to ready generates TC interrupt, even if
+		 * there was no data transfer. It may happen before
+		 * or after CC interrupt. */
+		if (host->cmd && host->response_busy) {
 			host->response_busy = 0;
 			return;
 		}
@@ -1048,19 +1148,20 @@ omap_hsmmc_xfer_done(struct omap_hsmmc_host *host, struct mmc_data *data)
 
 	host->data = NULL;
 
-	if ((host->dma_type == ADMA_XFER) && !data->host_cookie)
-		dma_unmap_sg(mmc_dev(host->mmc), data->sg, data->sg_len,
-			omap_hsmmc_get_dma_dir(host, data));
-
+	if (host->dma_type == ADMA_XFER)
+		omap_hsmmc_unmap_data(host, data);
 	if (!data->error)
 		data->bytes_xfered += data->blocks * (data->blksz);
 	else
 		data->bytes_xfered = 0;
 
 	if (data->stop && ((!(host->flags & AUTO_CMD12)) || data->error)) {
-		omap_hsmmc_start_command(host, data->stop, NULL);
+		omap_hsmmc_start_command(host, data->stop, NULL, 0);
 	} else {
-		if (data->stop)
+		struct mmc_request *req = host->mrq;
+
+		/* fill-in stop status only if CMD12 has actually been send */
+		if (data->stop && !req->sbc)
 			data->stop->resp[0] = OMAP_HSMMC_READ(host->base,
 							RSP76);
 		omap_hsmmc_request_done(host, data->mrq);
@@ -1092,8 +1193,27 @@ omap_hsmmc_errata_i761(struct omap_hsmmc_host *host, struct mmc_command *cmd)
 static void
 omap_hsmmc_cmd_done(struct omap_hsmmc_host *host, struct mmc_command *cmd)
 {
+	struct mmc_request *req = host->mrq;
+
 	if (host->cmd->opcode == MMC_SEND_TUNING_BLOCK)
 		return;
+
+	if (req->sbc && (host->cmd == req->sbc)) {
+		int err;
+		host->cmd = NULL;
+		err = omap_hsmmc_prepare_data(host, req);
+		if (err) {
+			req->cmd->error = err;
+			if (req->data)
+				req->data->error = err;
+			omap_hsmmc_request_done(host, req);
+			return;
+		}
+		omap_hsmmc_start_command(host, host->mrq->cmd,
+			host->mrq->data, 1);
+		return;
+	}
+
 	host->cmd = NULL;
 
 	if (cmd->flags & MMC_RSP_PRESENT) {
@@ -1103,9 +1223,23 @@ omap_hsmmc_cmd_done(struct omap_hsmmc_host *host, struct mmc_command *cmd)
 			cmd->resp[2] = OMAP_HSMMC_READ(host->base, RSP32);
 			cmd->resp[1] = OMAP_HSMMC_READ(host->base, RSP54);
 			cmd->resp[0] = OMAP_HSMMC_READ(host->base, RSP76);
+			TRAPZ_DESCRIBE(TRAPZ_KERN_MMC, omap_hsmmc_cmd_done,
+					"MMC HC status");
+			TRAPZ_LOG_PRINTF(TRAPZ_LOG_VERBOSE, 0, TRAPZ_KERN_MMC,
+					omap_hsmmc_cmd_done,
+					"Status: %d %d %d %d",
+					cmd->resp[3], cmd->resp[2], host->mmc->index, 0);
+			TRAPZ_LOG_PRINTF(TRAPZ_LOG_VERBOSE, 0, TRAPZ_KERN_MMC,
+					omap_hsmmc_cmd_done,
+					"Status: %d %d %d %d",
+					cmd->resp[1], cmd->resp[0], host->mmc->index, 1);
 		} else {
 			/* response types 1, 1b, 3, 4, 5, 6 */
 			cmd->resp[0] = OMAP_HSMMC_READ(host->base, RSP10);
+			TRAPZ_LOG_PRINTF(TRAPZ_LOG_VERBOSE, 0, TRAPZ_KERN_MMC,
+					omap_hsmmc_cmd_done,
+					"Status: %d %d %d %d",
+					cmd->resp[0], 0, host->mmc->index, 2);
 		}
 	}
 	if ((host->data == NULL && !host->response_busy) || cmd->error)
@@ -1118,20 +1252,18 @@ omap_hsmmc_cmd_done(struct omap_hsmmc_host *host, struct mmc_command *cmd)
 static void omap_hsmmc_dma_cleanup(struct omap_hsmmc_host *host, int errno)
 {
 	int dma_ch;
+	unsigned long flags;
 
 	host->data->error = errno;
 
-	spin_lock(&host->irq_lock);
+	spin_lock_irqsave(&host->irq_lock, flags);
 	dma_ch = host->dma_ch;
 	host->dma_ch = -1;
-	spin_unlock(&host->irq_lock);
+	spin_unlock_irqrestore(&host->irq_lock, flags);
 
 	if ((host->dma_type == SDMA_XFER) && (dma_ch != -1)) {
-		dma_unmap_sg(mmc_dev(host->mmc), host->data->sg,
-			host->data->sg_len,
-			omap_hsmmc_get_dma_dir(host, host->data));
+		omap_hsmmc_unmap_data(host, host->data);
 		omap_free_dma(dma_ch);
-		host->data->host_cookie = 0;
 	}
 	host->data = NULL;
 }
@@ -1216,16 +1348,19 @@ static void omap_hsmmc_do_irq(struct omap_hsmmc_host *host, int status)
 	int i = 0;
 
 	if (!host->req_in_progress) {
-		do {
-			OMAP_HSMMC_WRITE(host->base, STAT, status);
-			/* Flush posted write */
-			status = OMAP_HSMMC_READ(host->base, STAT);
-		} while (status & INT_EN_MASK);
+		dev_dbg(host->dev, "Supirious IRQ 0x%08X\n", status);
 		return;
 	}
 
 	data = host->data;
 	dev_dbg(mmc_dev(host->mmc), "IRQ Status is %x\n", status);
+	/* ACOS_MOD_BEGIN */
+	TRAPZ_DESCRIBE(TRAPZ_KERN_MMC, omap_hsmmc_do_irq,
+			"MMC interrupt");
+	TRAPZ_LOG_PRINTF(TRAPZ_LOG_DEBUG, 0, TRAPZ_KERN_MMC,
+			omap_hsmmc_do_irq,
+			"Status %x", status, 0, host->mmc->index, 0);
+	/* ACOS_MOD_END */
 
 	if (status & ERR) {
 		omap_hsmmc_dbg_report_irq(host, status);
@@ -1302,8 +1437,6 @@ static void omap_hsmmc_do_irq(struct omap_hsmmc_host *host, int status)
 			end_trans = 1;
 	}
 
-	OMAP_HSMMC_WRITE(host->base, STAT, status);
-
 	if (status & BRR) {
 		for (i = 0; i < sizeof(tuning_data)/4; i++)
 			tuning_data[i] = OMAP_HSMMC_READ(host->base, DATA);
@@ -1327,10 +1460,11 @@ static irqreturn_t omap_hsmmc_irq(int irq, void *dev_id)
 
 	status = OMAP_HSMMC_READ(host->base, STAT);
 	do {
+		OMAP_HSMMC_WRITE(host->base, STAT, status);
 		omap_hsmmc_do_irq(host, status);
 		/* Flush posted write */
 		status = OMAP_HSMMC_READ(host->base, STAT);
-	} while (status & INT_EN_MASK);
+	} while (status);
 
 	return IRQ_HANDLED;
 }
@@ -1362,7 +1496,7 @@ static int omap_hsmmc_switch_opcond(struct omap_hsmmc_host *host, int vdd)
 
 	/* Disable the clocks */
 	pm_runtime_put_sync(host->dev);
-	if (host->got_dbclk)
+	if (host->dbclk)
 		clk_disable(host->dbclk);
 
 	/* Turn the power off */
@@ -1373,7 +1507,7 @@ static int omap_hsmmc_switch_opcond(struct omap_hsmmc_host *host, int vdd)
 		ret = mmc_slot(host).set_power(host->dev, host->slot_id, 1,
 					       vdd);
 	pm_runtime_get_sync(host->dev);
-	if (host->got_dbclk)
+	if (host->dbclk)
 		clk_enable(host->dbclk);
 
 	if (ret != 0)
@@ -1530,6 +1664,7 @@ static void omap_hsmmc_dma_cb(int lch, u16 ch_status, void *cb_data)
 	struct omap_hsmmc_host *host = cb_data;
 	struct mmc_data *data;
 	int dma_ch, req_in_progress;
+	unsigned long flags;
 
 	if (!(ch_status & OMAP_DMA_BLOCK_IRQ)) {
 		dev_warn(mmc_dev(host->mmc), "unexpected dma status %x\n",
@@ -1537,79 +1672,42 @@ static void omap_hsmmc_dma_cb(int lch, u16 ch_status, void *cb_data)
 		return;
 	}
 
-	spin_lock(&host->irq_lock);
+	spin_lock_irqsave(&host->irq_lock, flags);
 	if (host->dma_ch < 0) {
-		spin_unlock(&host->irq_lock);
+		spin_unlock_irqrestore(&host->irq_lock, flags);
 		return;
 	}
 
 	data = host->mrq->data;
 	host->dma_sg_idx++;
-	if (host->dma_sg_idx < host->dma_len) {
+	if (host->dma_sg_idx < data->dma_len) {
 		/* Fire up the next transfer. */
 		omap_hsmmc_config_dma_params(host, data,
 					   data->sg + host->dma_sg_idx);
-		spin_unlock(&host->irq_lock);
+		spin_unlock_irqrestore(&host->irq_lock, flags);
 		return;
 	}
-
-	if (!data->host_cookie)
-		dma_unmap_sg(mmc_dev(host->mmc), data->sg, data->sg_len,
-			     omap_hsmmc_get_dma_dir(host, data));
 
 	req_in_progress = host->req_in_progress;
 	dma_ch = host->dma_ch;
 	host->dma_ch = -1;
-	spin_unlock(&host->irq_lock);
+	spin_unlock_irqrestore(&host->irq_lock, flags);
 
+	omap_hsmmc_unmap_data(host, data);
 	omap_free_dma(dma_ch);
 
 	/* If DMA has finished after TC, complete the request */
 	if (!req_in_progress) {
 		struct mmc_request *mrq = host->mrq;
 
-		host->mrq = NULL;
-		mmc_request_done(host->mmc, mrq);
+		omap_hsmmc_request_done(host, mrq);
 	}
 }
 
 static int omap_hsmmc_pre_dma_transfer(struct omap_hsmmc_host *host,
-				       struct mmc_data *data,
-				       struct omap_hsmmc_next *next)
+				       struct mmc_data *data)
 {
-	int dma_len;
-
-	if (!next && data->host_cookie &&
-	    data->host_cookie != host->next_data.cookie) {
-		dev_warn(host->dev, "[%s] invalid cookie: data->host_cookie %d"
-		       " host->next_data.cookie %d\n",
-		       __func__, data->host_cookie, host->next_data.cookie);
-		data->host_cookie = 0;
-	}
-
-	/* Check if next job is already prepared */
-	if (next ||
-	    (!next && data->host_cookie != host->next_data.cookie)) {
-		dma_len = dma_map_sg(mmc_dev(host->mmc), data->sg,
-				     data->sg_len,
-				     omap_hsmmc_get_dma_dir(host, data));
-
-	} else {
-		dma_len = host->next_data.dma_len;
-		host->next_data.dma_len = 0;
-	}
-
-
-	if (dma_len == 0)
-		return -EINVAL;
-
-	if (next) {
-		next->dma_len = dma_len;
-		data->host_cookie = ++next->cookie < 0 ? 1 : next->cookie;
-	} else
-		host->dma_len = dma_len;
-
-	return 0;
+	return omap_hsmmc_map_data(host, data);
 }
 
 /*
@@ -1645,7 +1743,7 @@ static int omap_hsmmc_start_sdma_transfer(struct omap_hsmmc_host *host,
 			mmc_hostname(host->mmc), ret);
 		return ret;
 	}
-	ret = omap_hsmmc_pre_dma_transfer(host, data, NULL);
+	ret = omap_hsmmc_pre_dma_transfer(host, data);
 	if (ret)
 		return ret;
 
@@ -1667,10 +1765,10 @@ static int mmc_populate_adma_desc_table(struct omap_hsmmc_host *host,
 	struct mmc_data *data = req->data;
 	int ret = 0;
 
-	ret = omap_hsmmc_pre_dma_transfer(host, data, NULL);
+	ret = omap_hsmmc_pre_dma_transfer(host, data);
 	if (ret)
 		return ret;
-	for (i = 0, j = 0; i < host->dma_len; i++) {
+	for (i = 0, j = 0; i < data->dma_len; i++) {
 		dmaaddr = sg_dma_address(data->sg + i);
 		dmalen = sg_dma_len(data->sg + i);
 		numblocks += dmalen / data->blksz;
@@ -1706,7 +1804,16 @@ static int mmc_populate_adma_desc_table(struct omap_hsmmc_host *host,
 	WARN_ON((i + j - 1) > DMA_TABLE_NUM_ENTRIES);
 	dev_dbg(mmc_dev(host->mmc),
 		"ADMA table has %d entries from %d sglist\n",
-		i + j, host->dma_len);
+		i + j, data->dma_len);
+
+	/* ACOS_MOD_BEGIN */
+	TRAPZ_DESCRIBE(TRAPZ_KERN_MMC,  mmc_populate_adma_desc_table,
+			"MMC Descriptor table populated");
+	TRAPZ_LOG_PRINTF(TRAPZ_LOG_VERBOSE, 0, TRAPZ_KERN_MMC,
+			mmc_populate_adma_desc_table,
+			"ADMA table has %d entries from %d sglist\n",
+			i + j, data->dma_len, host->mmc->index, 0);
+	/* ACOS_MOD_END */
 	return numblocks;
 }
 
@@ -1767,11 +1874,12 @@ omap_hsmmc_prepare_data(struct omap_hsmmc_host *host, struct mmc_request *req)
 	if (req->data == NULL) {
 		OMAP_HSMMC_WRITE(host->base, BLK, 0);
 		/*
-		 * Set an arbitrary 100ms data timeout for commands with
+		 * Set an arbitrary 500ms data timeout for commands with
 		 * busy signal.
 		 */
 		if (req->cmd->flags & MMC_RSP_BUSY)
-			set_data_timeout(host, 100000000U, 0);
+			/* really advanced mathematics inside */
+			set_data_timeout(host, 500 * 1000000U, 0);
 		return 0;
 	}
 
@@ -1800,29 +1908,21 @@ static void omap_hsmmc_post_req(struct mmc_host *mmc, struct mmc_request *mrq,
 	struct omap_hsmmc_host *host = mmc_priv(mmc);
 	struct mmc_data *data = mrq->data;
 
-	if (host->dma_type) {
-		if (data->host_cookie)
-			dma_unmap_sg(mmc_dev(host->mmc), data->sg,
-				     data->sg_len,
-				     omap_hsmmc_get_dma_dir(host, data));
-		data->host_cookie = 0;
-	}
+	if (data && host->dma_type)
+		omap_hsmmc_unmap_data(host, data);
 }
 
 static void omap_hsmmc_pre_req(struct mmc_host *mmc, struct mmc_request *mrq,
 			       bool is_first_req)
 {
 	struct omap_hsmmc_host *host = mmc_priv(mmc);
+	struct mmc_data *data = mrq->data;
 
-	if (mrq->data->host_cookie) {
-		mrq->data->host_cookie = 0;
-		return ;
-	}
+	if (!data)
+		return;
 
 	if (host->dma_type)
-		if (omap_hsmmc_pre_dma_transfer(host, mrq->data,
-						&host->next_data))
-			mrq->data->host_cookie = 0;
+		omap_hsmmc_map_data(host, data);
 }
 
 /*
@@ -1850,7 +1950,7 @@ static void omap_hsmmc_request(struct mmc_host *mmc, struct mmc_request *req)
 		if (req->data)
 			req->data->error = -EBADF;
 		req->cmd->retries = 0;
-		mmc_request_done(mmc, req);
+		omap_hsmmc_request_done(host, req);
 		return;
 	} else if (host->reqs_blocked)
 		host->reqs_blocked = 0;
@@ -1866,27 +1966,34 @@ static void omap_hsmmc_request(struct mmc_host *mmc, struct mmc_request *req)
 	 * the commands immediately
 	 */
 	if (host->power_mode == MMC_POWER_OFF) {
-		req->cmd->error = EIO;
+		req->cmd->error = -EIO;
 		if (req->data)
 			req->data->error = -EIO;
 		dev_warn(mmc_dev(host->mmc),
 			"Card is no longer present\n");
-		mmc_request_done(mmc, req);
+		omap_hsmmc_request_done(host, req);
 		return;
 	}
 
 	host->mrq = req;
+
+	OMAP_HSMMC_WRITE(host->base, STAT, STAT_CLEAR);
+
+	if (req->sbc) {
+		omap_hsmmc_start_command(host, req->sbc, NULL, 0);
+		return;
+	}
+
 	err = omap_hsmmc_prepare_data(host, req);
 	if (err) {
 		req->cmd->error = err;
 		if (req->data)
 			req->data->error = err;
-		host->mrq = NULL;
-		mmc_request_done(mmc, req);
+		omap_hsmmc_request_done(host, req);
 		return;
 	}
 
-	omap_hsmmc_start_command(host, req->cmd, req->data);
+	omap_hsmmc_start_command(host, req->cmd, req->data, 0);
 }
 
 /* Routine to configure clock values. Exposed API to core */
@@ -2118,7 +2225,8 @@ static int omap_execute_tuning(struct mmc_host *mmc, u32 opcode)
 
 		OMAP_HSMMC_WRITE(host->base, BLK, 64 | (1 << 16));
 		set_data_timeout(host, 50000000, 0);
-		omap_hsmmc_start_command(host, &cmd, NULL);
+		OMAP_HSMMC_WRITE(host->base, STAT, STAT_CLEAR);
+		omap_hsmmc_start_command(host, &cmd, NULL, 0);
 
 		host->cmd = NULL;
 		host->mrq = NULL;
@@ -2518,6 +2626,7 @@ static int __devinit omap_hsmmc_probe(struct platform_device *pdev)
 	host->dma_ch	= -1;
 	host->irq	= irq;
 	host->slot_id	= 0;
+	host->mapped_data_cnt = 0;
 	host->mapbase	= res->start + pdata->reg_offset;
 	host->base	= ioremap(host->mapbase, SZ_4K);
 	if (!host->base) {
@@ -2532,7 +2641,6 @@ static int __devinit omap_hsmmc_probe(struct platform_device *pdev)
 	if (cpu_is_omap44xx() && (omap_rev() > OMAP4430_REV_ES1_0))
 		host->errata |= OMAP_HSMMC_ERRATA_FSMR;
 
-	host->next_data.cookie = 1;
 	host->regulator_enabled = 0;
 	pdata->dev = host->dev;
 
@@ -2575,21 +2683,17 @@ static int __devinit omap_hsmmc_probe(struct platform_device *pdev)
 
 	omap_hsmmc_context_save(host);
 
-	if (cpu_is_omap2430()) {
-		host->dbclk = clk_get(&pdev->dev, "mmchsdb_fck");
-		/*
-		 * MMC can still work without debounce clock.
-		 */
-		if (IS_ERR(host->dbclk))
-			dev_warn(mmc_dev(host->mmc),
-				"Failed to get debounce clock\n");
-		else
-			host->got_dbclk = 1;
-
-		if (host->got_dbclk)
-			if (clk_enable(host->dbclk) != 0)
-				dev_dbg(mmc_dev(host->mmc), "Enabling debounce"
-							" clk failed\n");
+	host->dbclk = clk_get(&pdev->dev, "mmchsdb_fck");
+	/*
+	 * MMC can still work without debounce clock.
+	 */
+	if (IS_ERR(host->dbclk)) {
+		dev_warn(mmc_dev(host->mmc), "Failed to get debounce clk\n");
+		host->dbclk = NULL;
+	} else if (clk_enable(host->dbclk) != 0) {
+		dev_warn(mmc_dev(host->mmc), "Failed to enable debounce clk\n");
+		clk_put(host->dbclk);
+		host->dbclk = NULL;
 	}
 
 	ctrlr_caps = OMAP_HSMMC_READ(host->base, CAPA);
@@ -2629,7 +2733,7 @@ static int __devinit omap_hsmmc_probe(struct platform_device *pdev)
 	mmc->max_seg_size = mmc->max_req_size;
 
 	mmc->caps |= MMC_CAP_MMC_HIGHSPEED | MMC_CAP_SD_HIGHSPEED |
-		     MMC_CAP_WAIT_WHILE_BUSY | MMC_CAP_ERASE;
+		     MMC_CAP_WAIT_WHILE_BUSY | MMC_CAP_ERASE | MMC_CAP_CMD23;
 
 	mmc->caps |= mmc_slot(host).caps;
 	if (mmc->caps & MMC_CAP_8_BIT_DATA)
@@ -2702,6 +2806,8 @@ static int __devinit omap_hsmmc_probe(struct platform_device *pdev)
 		}
 		pdata->suspend = omap_hsmmc_suspend_cdirq;
 		pdata->resume = omap_hsmmc_resume_cdirq;
+	} else if (mmc_slot(host).mmc_data.register_status_notify) {
+		mmc_slot(host).mmc_data.register_status_notify(omap_hsmmc_status_notify_cb, host);
 	}
 
 	omap_hsmmc_disable_irq(host);
@@ -2742,7 +2848,7 @@ err_irq_cd_init:
 err_irq:
 	pm_runtime_put_sync(host->dev);
 	pm_runtime_disable(host->dev);
-	if (host->got_dbclk) {
+	if (host->dbclk) {
 		clk_disable(host->dbclk);
 		clk_put(host->dbclk);
 	}
@@ -2759,7 +2865,9 @@ err_ioremap:
 err_alloc:
 	omap_hsmmc_gpio_free(pdata);
 err:
-	release_mem_region(res->start, resource_size(res));
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (res)
+		release_mem_region(res->start, resource_size(res));
 	return ret;
 }
 
@@ -2783,7 +2891,7 @@ static int __devexit omap_hsmmc_remove(struct platform_device *pdev)
 	pm_runtime_put_sync(host->dev);
 	pm_runtime_disable(host->dev);
 	clk_put(host->fclk);
-	if (host->got_dbclk) {
+	if (host->dbclk) {
 		clk_disable(host->dbclk);
 		clk_put(host->dbclk);
 	}
@@ -2800,6 +2908,25 @@ static int __devexit omap_hsmmc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static void omap_hsmmc_shutdown(struct platform_device *pdev)
+{
+	struct omap_hsmmc_host *host = platform_get_drvdata(pdev);
+	long delay;
+
+	/* Protection from forgotten wakelock */
+	wake_unlock(&host->mmc->detect_wake_lock);
+
+	/* If require housekeeping and has minimum one request */
+	delay = mmc_slot(host).housekeeping_ms -
+			jiffies_to_msecs(jiffies - host->req_ts);
+	if (delay > 0) {
+		/* Block all requests */
+		host->protect_card = 1;
+		dev_info(&pdev->dev, "remain housekeeping %ld ms\n", delay);
+		msleep(delay);
+	}
+}
+
 #ifdef CONFIG_PM
 static int omap_hsmmc_suspend(struct device *dev)
 {
@@ -2811,6 +2938,9 @@ static int omap_hsmmc_suspend(struct device *dev)
 
 	if (host && host->suspended)
 		return 0;
+
+	if (host->req_in_progress)
+		return -EBUSY;
 
 	pm_runtime_get_sync(host->dev);
 	host->suspended = 1;
@@ -2843,7 +2973,7 @@ static int omap_hsmmc_suspend(struct device *dev)
 				OMAP_HSMMC_READ(host->base, HCTL) & ~SDBP);
 	}
 
-	if (host->got_dbclk)
+	if (host->dbclk)
 		clk_disable(host->dbclk);
 err:
 	pm_runtime_put_sync(host->dev);
@@ -2864,7 +2994,7 @@ static int omap_hsmmc_resume(struct device *dev)
 
 	pm_runtime_get_sync(host->dev);
 
-	if (host->got_dbclk)
+	if (host->dbclk)
 		clk_enable(host->dbclk);
 
 	if (!(host->mmc->pm_flags & MMC_PM_KEEP_POWER))
@@ -2927,6 +3057,7 @@ static struct dev_pm_ops omap_hsmmc_dev_pm_ops = {
 static struct platform_driver omap_hsmmc_driver = {
 	.probe		= omap_hsmmc_probe,
 	.remove		= __devexit_p(omap_hsmmc_remove),
+	.shutdown	= omap_hsmmc_shutdown,
 	.driver		= {
 		.name = DRIVER_NAME,
 		.owner = THIS_MODULE,
