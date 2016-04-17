@@ -124,7 +124,7 @@ phys_addr_t omaprpc_buffer_lookup(struct omaprpc_instance_t *rpc,
 				goto to_va;
 			}
 			if (ion_buffer) {
-				handle = ion_import(rpc->ion_client,
+				handle = ion_share_dma_buf_fd(rpc->ion_client,
 						    ion_buffer);
 			}
 			if (handle && !ion_phys(rpc->ion_client, handle,
