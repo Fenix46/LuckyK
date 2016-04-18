@@ -391,7 +391,7 @@ long rpmsg_omx_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				struct ion_handle *handle = NULL;
 
 				if (!IS_ERR_OR_NULL(ion_bufs[i]))
-					handle = ion_import_dma_buf(omx->ion_client,
+					handle = ion_share_dma_buf_fd(omx->ion_client,
 							   ion_bufs[i]);
 				if (!IS_ERR_OR_NULL(handle))
 					data.handles[i] = handle;
