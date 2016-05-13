@@ -205,22 +205,6 @@ extern void *dma_alloc_writecombine(struct device *, size_t, dma_addr_t *,
 int dma_mmap_writecombine(struct device *, struct vm_area_struct *,
 		void *, dma_addr_t, size_t);
 
-/**
- * dma_alloc_stronglyordered - allocate strongly ordered memory
- * @dev: valid struct device pointer, or NULL for ISA and EISA-like devices
- * @size: required memory size
- * @handle: bus-specific address
- *
- * Allocate some stronly ordered memory. This function allocates pages, and
- * will return the CPU-viewed address, and sets @handle to be the
- * device-viewed address.
- */
-extern void *dma_alloc_stronglyordered(struct device *, size_t, dma_addr_t *,
-		gfp_t);
-
-#define dma_free_stronglyordered(dev, size, cpu_addr, handle) \
-	dma_free_coherent(dev, size, cpu_addr, handle)
-
 /*
  * This can be called during boot to increase the size of the consistent
  * DMA region above it's default value of 2MB. It must be called before the
