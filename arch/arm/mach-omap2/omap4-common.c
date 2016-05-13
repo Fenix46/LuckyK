@@ -265,7 +265,7 @@ static int __init omap_barriers_init(void)
 	if (!cpu_is_omap44xx())
 		return -ENODEV;
 
-	dram_barrier_base = dma_alloc_stronglyordered(NULL, SZ_4K,
+	dram_barrier_base = dma_alloc_coherent(NULL, SZ_4K,
 				(dma_addr_t *)&dram_phys, GFP_KERNEL);
 	if (!dram_barrier_base) {
 		pr_err("%s: failed to allocate memory.\n", __func__);
