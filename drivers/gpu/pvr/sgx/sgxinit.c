@@ -1274,8 +1274,6 @@ IMG_VOID SGXDumpDebugInfo (PVRSRV_SGXDEV_INFO	*psDevInfo,
 {
 	IMG_UINT32	ui32CoreNum;
 
-	dsscomp_kdump();
-
 	PVR_LOG(("SGX debug (%s)", PVRVERSION_STRING));
 
 	if (bDumpSGXRegs)
