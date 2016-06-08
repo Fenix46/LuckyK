@@ -21,6 +21,7 @@
 #include <linux/platform_data/panel-s6e8aa0.h>
 
 #include <plat/android-display.h>
+#include <plat/omap_apps_brd_id.h>
 
 #include <video/omapdss.h>
 #include <video/omap-panel-generic-dpi.h>
@@ -28,6 +29,12 @@
 #include "board-tuna.h"
 #include "control.h"
 #include "mux.h"
+
+#include <drm/drm_edid.h>
+
+#include <plat/vram.h>
+#include <plat/sgx_omaplfb.h>
+#define OMAP4_SEVM_FB_RAM_SIZE       (SZ_16M + SZ_4M) /* 1184×720*4 * 2 */
 
 #define TUNA_GPIO_MLCD_RST		23
 
@@ -963,6 +970,30 @@ static struct omap_dss_device tuna_oled_device = {
 		.data4_lane	= 5,
 		.data4_pol	= 0,
 	},
+	.clocks = {
+		.dispc		= {
+			.channel = {
+				.lck_div	= 1,	/* LCD */
+				.pck_div	= 2,	/* PCD */
+				.lcd_clk_src
+					= OMAP_DSS_CLK_SRC_DSI_PLL_HSDIV_DISPC,
+			},
+			.dispc_fclk_src = OMAP_DSS_CLK_SRC_FCK,
+		},
+		.dsi		= {
+			.regn		= 19,	/* DSI_PLL_REGN */
+			.regm		= 236,	/* DSI_PLL_REGM */
+
+			.regm_dispc	= 6,	/* PLL_CLK1 (M4) */
+			.regm_dsi	= 6,	/* PLL_CLK2 (M5) */
+			.lp_clk_div	= 8,	/* LPDIV */
+			.offset_ddr_clk	= 122,	/* DDR PRE & DDR POST
+						 * offset increase
+						 */
+
+			.dsi_fclk_src   = OMAP_DSS_CLK_SRC_DSI_PLL_HSDIV_DSI,
+		},
+	},
 	.panel = {
 		.timings = {
 			.x_res = 720,
@@ -1000,33 +1031,8 @@ static struct omap_dss_device tuna_oled_device = {
 			.ddr_clk_always_on		= 0,
 			.window_sync			= 4,
 		},
-	},
-	.clocks = {
-		.dispc		= {
-			.channel = {
-				.lck_div	= 1,	/* LCD */
-				.pck_div	= 2,	/* PCD */
-				.lcd_clk_src
-					= OMAP_DSS_CLK_SRC_DSI_PLL_HSDIV_DISPC,
-			},
-			.dispc_fclk_src = OMAP_DSS_CLK_SRC_FCK,
-		},
-		.dsi		= {
-			.regn		= 19,	/* DSI_PLL_REGN */
-			.regm		= 236,	/* DSI_PLL_REGM */
-
-			.regm_dispc	= 6,	/* PLL_CLK1 (M4) */
-			.regm_dsi	= 6,	/* PLL_CLK2 (M5) */
-			.lp_clk_div	= 8,	/* LPDIV */
-			.offset_ddr_clk	= 122,	/* DDR PRE & DDR POST
-						 * offset increase
-						 */
-
-			.dsi_fclk_src   = OMAP_DSS_CLK_SRC_DSI_PLL_HSDIV_DSI,
-		},
-	},
-
-	.channel		= OMAP_DSS_CHANNEL_LCD,
+        },
+        .channel = OMAP_DSS_CHANNEL_LCD,
 };
 
 static void tuna_hdmi_mux_init(void)
@@ -1107,7 +1113,12 @@ static struct sgx_omaplfb_platform_data tuna_omaplfb_plat_data = {
 
 static struct omapfb_platform_data tuna_fb_pdata = {
 	.mem_desc = {
-		.region_cnt = ARRAY_SIZE(omaplfb_config_tuna),
+		.region_cnt = 1,
+		.region = {
+			[0] = {
+				.size = OMAP4_SEVM_FB_RAM_SIZE,
+			},
+		},
 	},
 };
 
@@ -1161,6 +1172,7 @@ void __init omap4_tuna_display_init(void)
 
 	pr_info("Using %ps\n", panel->factory_info);
 
+	omap_vram_set_sdram_vram(OMAP4_SEVM_FB_RAM_SIZE, 0);
 	omapfb_set_platform_data(&tuna_fb_pdata);
 	tuna_hdmi_mux_init();
 	omap_display_init(&tuna_dss_data);
