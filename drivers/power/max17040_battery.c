@@ -517,7 +517,7 @@ static int __devinit max17040_probe(struct i2c_client *client,
 	if (!i2c_check_functionality(adapter, I2C_FUNC_SMBUS_BYTE))
 		return -EIO;
 
-	chip = kzalloc(sizeof(*chip), GFP_KERNEL);
+	chip = devm_kzalloc(&client->dev, sizeof(*chip), GFP_KERNEL);
 	if (!chip)
 		return -ENOMEM;
 
@@ -615,7 +615,6 @@ err_pm_notifier:
 err_battery_supply_register:
 	wake_lock_destroy(&chip->work_wake_lock);
 	alarm_cancel(&chip->alarm);
-	kfree(chip);
 
 	return ret;
 }
@@ -631,7 +630,6 @@ static int __devexit max17040_remove(struct i2c_client *client)
 	wake_lock_destroy(&chip->work_wake_lock);
 	if (HAS_ALERT_INTERRUPT(chip->ver) && chip->pdata->use_fuel_alert)
 		free_irq(client->irq, chip);
-	kfree(chip);
 	return 0;
 }
 
