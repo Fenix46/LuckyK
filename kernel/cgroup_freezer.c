@@ -176,7 +176,7 @@ static int freezer_can_attach(struct cgroup_subsys *ss,
 	 * Anything frozen can't move or be moved to/from.
 	 */
 	cgroup_taskset_for_each(task, new_cgroup, tset)
-		if (cgroup_freezing(task))
+		if (cgroup_freezer(task))
 			return -EBUSY;
 
 	freezer = cgroup_freezer(new_cgroup);
