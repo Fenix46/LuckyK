@@ -32,6 +32,87 @@
 
 #define NUM_OF_L3_MASTERS ARRAY_SIZE(l3_masters)
 
+static u32 l3_flagmux[L3_MODULES] = {
+	0x50C,
+	0x100C,
+	0X020C
+};
+
+/*
+ * L3 Target instances
+ */
+static u32 l3_targ_inst_clk1[] = {
+	0x100, /* DMM1 */
+	0x200, /* DMM2 */
+	0x300, /* ABE */
+	0x400, /* L4CFG */
+	0x600  /* CLK2 PWR DISC */
+};
+
+static u32 l3_targ_inst_clk2[] = {
+	0x500,		/* CORTEX M3 */
+	0x300,		/* DSS */
+	0x100,		/* GPMC */
+	0x400,		/* ISS */
+	0x700,		/* IVAHD */
+	0xD00,		/* missing in TRM  corresponds to AES1*/
+	0x900,		/* L4 PER0*/
+	0x200,		/* OCMRAM */
+	0x100,		/* missing in TRM corresponds to GPMC sERROR*/
+	0x600,		/* SGX */
+	0x800,		/* SL2 */
+	0x1600,		/* C2C */
+	0x1100,		/* missing in TRM corresponds PWR DISC CLK1*/
+	0xF00,		/* missing in TRM corrsponds to SHA1*/
+	0xE00,		/* missing in TRM corresponds to AES2*/
+	0xC00,		/* L4 PER3 */
+	0xA00,		/* L4 PER1*/
+	0xB00		/* L4 PER2*/
+};
+
+static u32 l3_targ_inst_clk3[] = {
+	0x0100	/* EMUSS */
+};
+
+static char *l3_targ_inst_name[L3_MODULES][18] = {
+	{
+	"DMM1",
+	"DMM2",
+	"ABE",
+	"L4CFG",
+	"CLK2 PWR DISC",
+	},
+	{
+	"CORTEX M3" ,
+	"DSS ",
+	"GPMC ",
+	"ISS ",
+	"IVAHD ",
+	"AES1",
+	"L4 PER0",
+	"OCMRAM ",
+	"GPMC sERROR",
+	"SGX ",
+	"SL2 ",
+	"C2C ",
+	"PWR DISC CLK1",
+	"SHA1",
+	"AES2",
+	"L4 PER3",
+	"L4 PER1",
+	"L4 PER2",
+	},
+	{
+	"EMUSS",
+	},
+};
+
+static u32 *l3_targ[L3_MODULES] = {
+	l3_targ_inst_clk1,
+	l3_targ_inst_clk2,
+	l3_targ_inst_clk3,
+};
+
 /*
  * Interrupt Handler for L3 error detection.
  *	1) Identify the L3 clockdomain partition to which the error belongs to.
@@ -59,10 +140,10 @@ static irqreturn_t l3_interrupt_handler(int irq, void *_l3)
 {
 
 	struct omap4_l3		*l3 = _l3;
-	int inttype, i, j, k;
+	int inttype, i, k;
 	int err_src = 0;
-	u32 std_err_main_addr, std_err_main, err_reg;
-	u32 base, slave_addr, clear, regoffset, masterid;
+	u32 l3_targ_base, std_err_main, err_reg;
+	u32 base, clear, regoffset, masterid;
 	char *source_name;
 
 	/* Get the Type of interrupt */
@@ -79,27 +160,20 @@ static irqreturn_t l3_interrupt_handler(int irq, void *_l3)
 		/* Get the corresponding error and analyse */
 		if (err_reg) {
 			/* Identify the source from control status register */
-			for (j = 0; !(err_reg & (1 << j)); j++)
-									;
-
-			err_src = j;
+			err_src = ffs(err_reg) - 1;
 			/* Read the stderrlog_main_source from clk domain */
-			std_err_main_addr = base + *(l3_targ[i] + err_src);
-			std_err_main = readl(std_err_main_addr);
+			l3_targ_base = base + (*(l3_targ[i] + err_src));
+			std_err_main =  readl(l3_targ_base +
+					      L3_TARG_STDERRLOG_MAIN);
 
 			switch (std_err_main & CUSTOM_ERROR) {
 			case STANDARD_ERROR:
 				source_name =
-				l3_targ_stderrlog_main_name[i][err_src];
-				regoffset = targ_reg_offset[i][err_src];
-
-				slave_addr = std_err_main_addr +
-						L3_SLAVE_ADDRESS_OFFSET;
-
+					l3_targ_inst_name[i][err_src];
 				pr_err("L3 standard error: SOURCE:%s at address 0x%x MSTADDR=0x%x hdr=0x%x\n",
-						source_name, readl(slave_addr),
-						readl(base + regoffset + L3_MSTADDR),
-						readl(base + regoffset + L3_HDR));
+				     source_name,
+				     readl(l3_targ_base +
+					   L3_TARG_STDERRLOG_SLVOFSLSB));
 				WARN_ONCE(true, "L3 standard error");
 
 				/* Disable ABE L3 Interrupt on LTE boards */
@@ -116,14 +190,13 @@ static irqreturn_t l3_interrupt_handler(int irq, void *_l3)
 
 				/* clear the std error log*/
 				clear = std_err_main | CLEAR_STDERR_LOG;
-				writel(clear, std_err_main_addr);
+				writel(clear, l3_targ_base +
+					      L3_TARG_STDERRLOG_MAIN);
 				break;
 
 			case CUSTOM_ERROR:
 				source_name =
-				l3_targ_stderrlog_main_name[i][err_src];
-				regoffset = targ_reg_offset[i][err_src];
-
+					l3_targ_inst_name[i][err_src];
 				pr_err("L3 CUSTOM SRESP error with SOURCE:%s info=0x%x\n",
 						source_name,
 						readl(base + regoffset + L3_CUSTOMINFO_INFO));
@@ -149,15 +222,16 @@ static irqreturn_t l3_interrupt_handler(int irq, void *_l3)
 
 				/* clear the std error log*/
 				clear = std_err_main | CLEAR_STDERR_LOG;
-				writel(clear, std_err_main_addr);
+				writel(clear, l3_targ_base +
+					      L3_TARG_STDERRLOG_MAIN);
 				break;
 
 			default:
 				/* Nothing to be handled here as of now */
 				break;
 			}
-		/* Error found so break the for loop */
-		break;
+			/* Error found so break the for loop */
+			break;
 		}
 	}
 	return IRQ_HANDLED;

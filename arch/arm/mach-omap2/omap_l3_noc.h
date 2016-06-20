@@ -23,9 +23,6 @@
 #ifndef __ARCH_ARM_MACH_OMAP2_L3_INTERCONNECT_3XXX_H
 #define __ARCH_ARM_MACH_OMAP2_L3_INTERCONNECT_3XXX_H
 
-/*
- * L3 register offsets
- */
 #define L3_MODULES			3
 #define CLEAR_STDERR_LOG		(1 << 31)
 #define CUSTOM_ERROR			0x2
@@ -55,47 +52,11 @@
 #define L3_CUSTOMINFO_OPCODE		0x6C
 #define L3_ADDRSPACESIZELOG		0x80
 
-u32 l3_flagmux[L3_MODULES] = {
-	0x50C,
-	0x100C,
-	0X020C
-};
-
 /*
- * L3 Target standard Error register offsets
+ * L3 TARG register offsets
  */
-u32 l3_targ_stderrlog_main_clk1[] = {
-	0x148, /* DMM1 */
-	0x248, /* DMM2 */
-	0x348, /* ABE */
-	0x448, /* L4CFG */
-	0x648  /* CLK2 PWR DISC */
-};
-
-u32 l3_targ_stderrlog_main_clk2[] = {
-	0x548,		/* CORTEX M3 */
-	0x348,		/* DSS */
-	0x148,		/* GPMC */
-	0x448,		/* ISS */
-	0x748,		/* IVAHD */
-	0xD48,		/* missing in TRM  corresponds to AES1*/
-	0x948,		/* L4 PER0*/
-	0x248,		/* OCMRAM */
-	0x148,		/* missing in TRM corresponds to GPMC sERROR*/
-	0x648,		/* SGX */
-	0x848,		/* SL2 */
-	0x1648,		/* C2C */
-	0x1148,		/* missing in TRM corresponds PWR DISC CLK1*/
-	0xF48,		/* missing in TRM corrsponds to SHA1*/
-	0xE48,		/* missing in TRM corresponds to AES2*/
-	0xC48,		/* L4 PER3 */
-	0xA48,		/* L4 PER1*/
-	0xB48		/* L4 PER2*/
-};
-
-u32 l3_targ_stderrlog_main_clk3[] = {
-	0x0148	/* EMUSS */
-};
+#define L3_TARG_STDERRLOG_MAIN		0x48
+#define L3_TARG_STDERRLOG_SLVOFSLSB	0x5c
 
 struct l3_masters_data {
 	u32 id;
@@ -125,84 +86,12 @@ struct l3_masters_data l3_masters[] = {
 	 { 0xA4, "MMC2"},
 };
 
-char *l3_targ_stderrlog_main_name[L3_MODULES][18] = {
-	{
-	"DMM1",
-	"DMM2",
-	"ABE",
-	"L4CFG",
-	"CLK2 PWR DISC",
-	},
-	{
-	"CORTEX M3" ,
-	"DSS ",
-	"GPMC ",
-	"ISS ",
-	"IVAHD ",
-	"AES1",
-	"L4 PER0",
-	"OCMRAM ",
-	"GPMC sERROR",
-	"SGX ",
-	"SL2 ",
-	"C2C ",
-	"PWR DISC CLK1",
-	"SHA1",
-	"AES2",
-	"L4 PER3",
-	"L4 PER1",
-	"L4 PER2",
-	},
-	{
-	"EMUSS",
-	},
-};
-
-u32 targ_reg_offset[L3_MODULES][18] = {
-	{
-	0x100,
-	0x200,
-	0x300,
-	0x400,
-	0x0,
-	},
-	{
-	0x500,
-	0x300,
-	0x100,
-	0x400,
-	0x700,
-	0x000,
-	0x000,
-	0x000,
-	0x000,
-	0x600,
-	0x800,
-	0x000,
-	0x000,
-	0x000,
-	0x000,
-	0x100,
-	0xA00,
-	0xB00,
-	},
-	{
-	0x000000
-	},
-};
-
-u32 *l3_targ[L3_MODULES] = {
-	l3_targ_stderrlog_main_clk1,
-	l3_targ_stderrlog_main_clk2,
-	l3_targ_stderrlog_main_clk3,
-};
-
 struct omap4_l3 {
 	struct device	*dev;
 	struct clk	*ick;
 
 	/* memory base */
-	void __iomem *l3_base[4];
+	void __iomem *l3_base[L3_MODULES];
 
 	int		debug_irq;
 	int		app_irq;
