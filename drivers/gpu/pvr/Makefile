@@ -25,6 +25,7 @@ ccflags-y += \
 	-DSYS_SUPPORTS_SGX_IDLE_CALLBACK \
 	-DPVRSRV_REFCOUNT_DEBUG \
 	-DSYS_OMAP4_HAS_DVFS_FRAMEWORK \
+        -DPVR_ANDROID_NATIVE_WINDOW_HAS_SYNC \
 	-Idrivers/gpu/pvr/sgx
 
 ccflags-$(CONFIG_PVR_SGXCORE_540) += \
@@ -74,6 +75,7 @@ pvrsrvkm-y := \
 	proc.o \
 	pvr_bridge_k.o \
 	pvr_debug.o \
+        pvr_sync.o \
 	mm.o \
 	mutex.o \
 	event.o \
