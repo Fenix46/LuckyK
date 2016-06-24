@@ -44,6 +44,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "services_headers.h"
 #include "buffer_manager.h"
+#include "devicemem.h"
 #include "pdump_km.h"
 #include "pvr_bridge_km.h"
 #include "osfunc.h"
