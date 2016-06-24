@@ -40,6 +40,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
 #include "ion.h"
+#include "ion_sync.h"
 
 #include "services.h"
 #include "servicesint.h"
