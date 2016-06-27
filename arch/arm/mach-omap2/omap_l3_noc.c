@@ -140,10 +140,10 @@ static irqreturn_t l3_interrupt_handler(int irq, void *_l3)
 {
 
 	struct omap4_l3		*l3 = _l3;
-	int inttype, i, k;
+	int inttype = 0, i = 0, k = 0;
 	int err_src = 0;
-	u32 l3_targ_base, std_err_main, err_reg;
-	u32 base, clear, regoffset, masterid;
+	u32 l3_targ_base = 0, std_err_main = 0, err_reg = 0;
+	u32 base = 0, clear = 0, regoffset = 0, masterid = 0;
 	char *source_name;
 
 	/* Get the Type of interrupt */
