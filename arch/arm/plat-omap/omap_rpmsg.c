@@ -402,7 +402,7 @@ static struct virtqueue *rp_find_vq(struct virtio_device *vdev,
 	pr_debug("vring%d: phys 0x%x, virt 0x%x\n", index, rpdev->vring[index],
 					(unsigned int) rpvq->addr);
 
-	vq = vring_new_virtqueue(RPMSG_NUM_BUFS / 2, RPMSG_VRING_ALIGN, vdev,
+	vq = vring_new_virtqueue(RPMSG_NUM_BUFS / 2, RPMSG_VRING_ALIGN, vdev, false,
 				rpvq->addr, omap_rpmsg_notify, callback, name);
 	if (!vq) {
 		pr_err("vring_new_virtqueue failed\n");
