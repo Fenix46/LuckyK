@@ -1368,6 +1368,7 @@ void split_page(struct page *page, unsigned int order)
  */
 int split_free_page(struct page *page)
 {
+        int mt;
 	unsigned int order;
 	unsigned long watermark;
 	struct zone *zone;
