@@ -3973,11 +3973,12 @@ static int dsi_proto_config(struct omap_dss_device *dssdev)
 		dsi_check_dispc_hsync_period(dssdev);
 	}
 
-	dsi_vc_initial_config(dsidev, 0);
-	dsi_vc_initial_config(dsidev, 1);
-	dsi_vc_initial_config(dsidev, 2);
-	dsi_vc_initial_config(dsidev, 3);
-
+	if(!dssdev->skip_init){
+		dsi_vc_initial_config(dsidev, 0);
+		dsi_vc_initial_config(dsidev, 1);
+		dsi_vc_initial_config(dsidev, 2);
+		dsi_vc_initial_config(dsidev, 3);
+	}
 	return 0;
 }
 
@@ -4603,10 +4604,12 @@ static int dsi_configure_dsi_clocks(struct omap_dss_device *dssdev)
 		return r;
 	}
 
-	r = dsi_pll_set_clock_div(dsidev, &cinfo);
-	if (r) {
-		DSSERR("Failed to set dsi clocks\n");
-		return r;
+	if(!dssdev->skip_init){
+		r = dsi_pll_set_clock_div(dsidev, &cinfo);
+		if (r) {
+			DSSERR("Failed to set dsi clocks\n");
+			return r;
+		}
 	}
 
 	return 0;
@@ -4687,13 +4690,15 @@ static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 
 	DSSDBG("PLL OK\n");
 
-	r = dsi_configure_dispc_clocks(dssdev);
-	if (r)
-		goto err2;
-
-	r = dsi_cio_init(dssdev);
-	if (r)
-		goto err2;
+	if (!dssdev->skip_init) {
+		r = dsi_configure_dispc_clocks(dssdev);
+		if (r)
+			goto err2;
+		r = dsi_cio_init(dssdev);
+		if (r)
+			goto err2;
+	} else
+		dsi_enable_scp_clk(dsidev);
 
 	_dsi_print_reset_status(dsidev);
 
@@ -4703,17 +4708,20 @@ static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 	if (1)
 		_dsi_print_reset_status(dsidev);
 
-	r = dsi_proto_config(dssdev);
-	if (r)
-		goto err3;
 
-	/* enable interface */
-	dsi_vc_enable(dsidev, 0, 1);
-	dsi_vc_enable(dsidev, 1, 1);
-	dsi_vc_enable(dsidev, 2, 1);
-	dsi_vc_enable(dsidev, 3, 1);
-	dsi_if_enable(dsidev, 1);
-	dsi_force_tx_stop_mode_io(dsidev);
+	if (!dssdev->skip_init) {
+		r = dsi_proto_config(dssdev);
+		if (r)
+			goto err3;
+
+		/* enable interface */
+		dsi_vc_enable(dsidev, 0, 1);
+		dsi_vc_enable(dsidev, 1, 1);
+		dsi_vc_enable(dsidev, 2, 1);
+		dsi_vc_enable(dsidev, 3, 1);
+		dsi_if_enable(dsidev, 1);
+		dsi_force_tx_stop_mode_io(dsidev);
+	}
 
 	return 0;
 err3:
@@ -4821,7 +4829,9 @@ int omapdss_dsi_display_enable(struct omap_dss_device *dssdev)
 	if (r)
 		goto err_get_dsi;
 
-	dsi_enable_pll_clock(dsidev, 1);
+	if(!dssdev->skip_init) {
+		dsi_enable_pll_clock(dsidev, 1);
+	}
 
 	REG_FLD_MOD(dsidev, DSI_SYSCONFIG, 1, 1, 1);
 	_dsi_wait_reset(dsidev);
@@ -4830,9 +4840,11 @@ int omapdss_dsi_display_enable(struct omap_dss_device *dssdev)
 	REG_FLD_MOD(dsidev, DSI_SYSCONFIG, 1, 2, 2);
 	_dsi_initialize_irq(dsidev);
 
-	r = dsi_display_init_dispc(dssdev);
-	if (r)
-		goto err_init_dispc;
+	if(!dssdev->skip_init) {
+		r = dsi_display_init_dispc(dssdev);
+		if (r)
+			goto err_init_dispc;
+	}
 
 	r = dsi_display_init_dsi(dssdev);
 	if (r)
