@@ -3105,6 +3105,20 @@ static int dsi_vc_send_long(struct platform_device *dsidev, int channel,
 		dsi_vc_write_long_payload(dsidev, channel, b1, b2, b3, 0);
 	}
 
+	/* wait for IRQ for long packet transmission confirmation */
+	for (i = 0; i < 1000; i++) {
+		u32 val;
+		val = dsi_read_reg(dsidev, DSI_VC_IRQSTATUS(channel));
+		if (val & 0x4) {
+			DSSDBG("long packet success\n");
+			REG_FLD_MOD(dsidev, DSI_VC_IRQSTATUS(channel), 1, 2, 2);
+			return 0;
+		}
+		udelay(1);
+	}
+
+	DSSERR("long packet send failed\n");
+
 	return r;
 }
 
@@ -3151,7 +3165,7 @@ static int dsi_vc_write_nosync_common(struct omap_dss_device *dssdev,
 		int channel, u8 *data, int len, enum dss_dsi_content_type type)
 {
 	struct platform_device *dsidev = dsi_get_dsidev_from_dssdev(dssdev);
-	int r;
+	int r = 0;
 
 	if (len == 0) {
 		BUG_ON(type == DSS_DSI_CONTENT_DCS);
@@ -4864,6 +4878,12 @@ int omapdss_dsi_display_enable(struct omap_dss_device *dssdev)
 
 	if(!dssdev->skip_init) {
 		dsi_enable_pll_clock(dsidev, 1);
+
+		REG_FLD_MOD(dsidev, DSI_SYSCONFIG, 1, 1, 1);
+		_dsi_wait_reset(dsidev);
+
+		/* ENWAKEUP */
+		REG_FLD_MOD(dsidev, DSI_SYSCONFIG, 1, 2, 2);
 	}
 
 	REG_FLD_MOD(dsidev, DSI_SYSCONFIG, 1, 1, 1);
