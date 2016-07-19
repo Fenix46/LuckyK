@@ -1522,7 +1522,7 @@ static struct irqaction *__free_percpu_irq(unsigned int irq, void __percpu *dev_
 
 	unregister_handler_proc(irq, action);
 
-	module_put(desc->owner);
+	//module_put(desc->owner);
 	return action;
 
 bad:
