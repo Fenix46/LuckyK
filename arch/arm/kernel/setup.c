@@ -293,7 +293,7 @@ static void __init cacheid_init(void)
 				cacheid |= CACHEID_PIPT;
 				break;
 			}
-			else if (cpu_has_aliasing_icache(CPU_ARCH_ARMv7))
+		} else if (cpu_has_aliasing_icache(CPU_ARCH_ARMv7)) {
 				cacheid |= CACHEID_VIPT_I_ALIASING;
 		} else if (cachetype & (1 << 23)) {
 			cacheid = CACHEID_VIPT_ALIASING;
