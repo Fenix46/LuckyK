@@ -3115,8 +3115,6 @@ static void pull_task(struct rq *src_rq, struct task_struct *p,
 	set_task_cpu(p, this_cpu);
 	activate_task(this_rq, p, 0);
 	check_preempt_curr(this_rq, p, 0);
-	if (task_notify_on_migrate(p))
-		per_cpu(dbs_boost_needed, this_cpu) = true;
 }
 
 /*
@@ -3368,7 +3366,7 @@ load_balance_fair(struct rq *this_rq, int this_cpu, struct rq *busiest,
 	struct task_group *tg;
 
 	rcu_read_lock();
-	update_h_load(busiest_cpu);
+	//update_h_load(busiest_cpu);
 
 	list_for_each_entry_rcu(tg, &task_groups, list) {
 		struct cfs_rq *busiest_cfs_rq = tg->cfs_rq[busiest_cpu];
