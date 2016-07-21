@@ -3233,9 +3233,9 @@ static int move_one_task(struct lb_env *env)
 	return 0;
 }
 
-static unsigned long task_h_load(struct task_struct *p);
-
 static const unsigned int sched_nr_migrate_break = 32;
+
+static unsigned long task_h_load(struct task_struct *p);
 
 /*
  * move_tasks tries to move up to load_move weighted load from busiest to
@@ -3371,7 +3371,7 @@ static void update_shares(int cpu)
 	rcu_read_unlock();
 }
 
-static unsigned long load_balance_fair(struct lb_env *env)
+static unsigned long task_h_load(struct task_struct *p)
 {
 	struct cfs_rq *cfs_rq = task_cfs_rq(p);
 	unsigned long load;
@@ -4445,8 +4445,10 @@ redo:
 more_balance:
 		local_irq_save(flags);
 		double_rq_lock(this_rq, busiest);
+# if 0
 		if (!env.loop)
-			update_h_load(env.src_cpu);
+			update_h_load(cpu_of(env.src_cpu));
+#endif
 		ld_moved += move_tasks(&env);
 		double_rq_unlock(this_rq, busiest);
 		local_irq_restore(flags);
