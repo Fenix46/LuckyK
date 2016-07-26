@@ -67,6 +67,7 @@ struct virtproc_info {
 	int num_bufs;
 	int buf_size;
 	struct idr endpoints;
+	spinlock_t rx_lock;
 	spinlock_t endpoints_lock;
 	wait_queue_head_t sendq;
 	struct rpmsg_endpoint *ns_ept;
@@ -75,6 +76,27 @@ struct virtproc_info {
 
 #define to_rpmsg_channel(d) container_of(d, struct rpmsg_channel, dev)
 #define to_rpmsg_driver(d) container_of(d, struct rpmsg_driver, drv)
+
+/*
+ * We're allocating 512 buffers of 512 bytes for communications, and then
+ * using the first 256 buffers for RX, and the last 256 buffers for TX.
+ *
+ * Each buffer will have 16 bytes for the msg header and 496 bytes for
+ * the payload.
+ *
+ * This will require a total space of 256KB for the buffers.
+ *
+ * We might also want to add support for user-provided buffers in time.
+ * This will allow bigger buffer size flexibility, and can also be used
+ * to achieve zero-copy messaging.
+ *
+ * Note that these numbers are purely a decision of this driver - we
+ * can change this without changing anything in the firmware of the remote
+ * processor.
+ */
+#define RPMSG_NUM_BUFS		(512)
+#define RPMSG_BUF_SIZE		(512)
+#define RPMSG_TOTAL_BUF_SPACE	(RPMSG_NUM_BUFS * RPMSG_BUF_SIZE)
 
 /*
  * Local addresses are dynamically allocated on-demand.
@@ -560,7 +582,9 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 
 	/* make sure the descriptors are updated before reading */
 	rmb();
+	spin_lock(&vrp->rx_lock);
 	msg = virtqueue_get_buf(rvq, &len);
+	spin_unlock(&vrp->rx_lock);
 	if (!msg) {
 		dev_err(dev, "uhm, incoming signal, but no used buffer ?\n");
 		return;
@@ -600,8 +624,10 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 	/* publish the real size of the buffer */
 	sg_init_one(&sg, sim_addr, RPMSG_BUF_SIZE);
 
+	spin_lock(&vrp->rx_lock);
 	err = virtqueue_add_buf(vrp->rvq, &sg, 0, 1, msg, GFP_KERNEL);
 	if (err < 0) {
+		spin_unlock(&vrp->rx_lock);
 		dev_err(dev, "failed to add a virtqueue buffer: %d\n", err);
 		return;
 	}
@@ -610,6 +636,7 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 
 	/* tell the remote processor we added another available rx buffer */
 	virtqueue_kick(vrp->rvq);
+	spin_unlock(&vrp->rx_lock);
 }
 
 static void rpmsg_xmit_done(struct virtqueue *svq)
@@ -694,6 +721,7 @@ static int rpmsg_probe(struct virtio_device *vdev)
 	idr_init(&vrp->endpoints);
 	spin_lock_init(&vrp->endpoints_lock);
 	mutex_init(&vrp->svq_lock);
+	spin_lock_init(&vrp->rx_lock);
 	init_waitqueue_head(&vrp->sendq);
 
 	/* We expect two virtqueues, rx and tx (in this order) */
