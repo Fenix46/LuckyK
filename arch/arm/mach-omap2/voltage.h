@@ -155,6 +155,10 @@ struct omap_volt_data {
 	u32	volt_calibrated;
 	u32	volt_dynamic_nominal;
 	u32	volt_margin;
+#ifdef CONFIG_OMAP_SMARTREFLEX_CUSTOM_SENSOR
+        u32     sr_nsensor;
+        u32     sr_psensor;
+#endif
 	u32	sr_efuse_offs;
 	u8	sr_errminlimit;
 	u8	vp_errgain;
@@ -194,7 +198,11 @@ struct omap_volt_data {
 #define OMAP4430_VP_IVA_VLIMITTO_VDDMAX		1240000
 #define OMAP4430_VP_CORE_VLIMITTO_VDDMAX	1170000
 
+#ifdef CONFIG_OMAP4460_CPU_OVERCLOCK
 #define OMAP4460_VP_MPU_VLIMITTO_VDDMAX		1380000
+#else
+#define OMAP4460_VP_MPU_VLIMITTO_VDDMAX         1425000
+#endif
 #define OMAP4460_VP_IVA_VLIMITTO_VDDMAX		1375000
 #define OMAP4460_VP_CORE_VLIMITTO_VDDMAX	1250000
 
