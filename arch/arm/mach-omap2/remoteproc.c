@@ -20,6 +20,8 @@
 #include <linux/slab.h>
 #include <linux/remoteproc.h>
 #include <linux/memblock.h>
+#include <linux/dma-contiguous.h>
+#include <linux/dma-mapping.h>
 #include <plat/omap_device.h>
 #include <plat/omap_hwmod.h>
 #include <plat/remoteproc.h>
@@ -27,6 +29,14 @@
 #include <plat/io.h>
 #include "cm2_44xx.h"
 #include "cm-regbits-44xx.h"
+
+/*
+ * Temporarily define the CMA base address explicitly.
+ *
+ * This will go away as soon as we have the IOMMU-based generic
+ * DMA API in place.
+ */
+#define OMAP_RPROC_CMA_BASE	(0xa9800000)
 
 #define OMAP4430_CM_M3_M3_CLKCTRL (OMAP4430_CM2_BASE + OMAP4430_CM2_CORE_INST \
 		+ OMAP4_CM_DUCATI_DUCATI_CLKCTRL_OFFSET)
@@ -109,6 +119,18 @@ static struct rproc_mem_pool *omap_rproc_get_pool(const char *name)
 	}
 
 	return pool;
+}
+
+void __init omap_rproc_reserve_cma(void)
+{
+	int ret;
+
+	/* reserve CMA memory for OMAP4's M3 "ducati" remote processor */
+	ret = dma_declare_contiguous(&omap4_rproc_data,
+					CONFIG_OMAP_DUCATI_CMA_SIZE,
+					OMAP_RPROC_CMA_BASE, 0);
+        if (ret)
+		pr_err("dma_declare_contiguous failed %d\n", ret);
 }
 
 static int __init omap_rproc_init(void)

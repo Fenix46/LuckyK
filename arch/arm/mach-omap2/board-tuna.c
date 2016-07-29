@@ -1402,6 +1402,7 @@ static void __init tuna_reserve(void)
 				OMAP_RAM_CONSOLE_SIZE_DEFAULT);
 
 #ifndef CONFIG_CMA
+	omap_rproc_reserve_cma();
 	/* do the static reservations first */
 	memblock_remove(PHYS_ADDR_SMC_MEM, PHYS_ADDR_SMC_SIZE);
 	memblock_remove(PHYS_ADDR_DUCATI_MEM, PHYS_ADDR_DUCATI_SIZE);

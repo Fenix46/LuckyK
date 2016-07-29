@@ -63,6 +63,8 @@ struct omap_rproc_pdata {
 	unsigned sus_timeout;
 	char *sus_mbox_name;
 	u8 timers_cnt;
+	int (*device_enable) (struct platform_device *pdev);
+	int (*device_shutdown) (struct platform_device *pdev);
 };
 
 enum omap_rproc_mempool_type {
@@ -75,6 +77,7 @@ void omap_ipu_reserve_sdram_memblock(void);
 u32 omap_ipu_get_mempool_size(enum omap_rproc_mempool_type type);
 phys_addr_t omap_ipu_get_mempool_base(enum omap_rproc_mempool_type type);
 void omap_ipu_set_static_mempool(u32 start, u32 size);
+void __init omap_rproc_reserve_cma(void);
 #else
 static inline void omap_ipu_reserve_sdram_memblock(void) { }
 static inline u32 omap_ipu_get_mempool_size(enum omap_rproc_mempool_type type)
@@ -87,6 +90,7 @@ static inline phys_addr_t omap_ipu_get_mempool_base(
 	return 0;
 }
 static inline void omap_ipu_set_static_mempool(u32 start, u32 size) { }
+void __init omap_rproc_reserve_cma(void)
 #endif
 
 int omap_rproc_deactivate(struct omap_device *od);
