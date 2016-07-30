@@ -1342,13 +1342,6 @@ static struct rproc *_rproc_get(const char *name, bool use_refcounting)
 	/* rproc_put() calls should wait until async loader completes */
 	init_completion(&rproc->firmware_loading_complete);
 
-#ifdef CONFIG_CMA
-	if (!omap_ion_ipu_allocate_memory()) {
-		ret = NULL;
-		goto unlock_mutex;
-	}
-#endif
-
 	dev_info(dev, "powering up %s\n", name);
 
 	err = rproc_loader(rproc);
@@ -1467,10 +1460,6 @@ static void _rproc_put(struct rproc *rproc, bool use_refcounting)
 				goto out;
 			}
 		}
-
-#ifdef CONFIG_CMA
-		omap_ion_ipu_free_memory();
-#endif
 	}
 
 	if (rproc->state == RPROC_CRASHED)

@@ -1403,10 +1403,10 @@ static void __init tuna_reserve(void)
 
 #ifndef CONFIG_CMA
 	omap_rproc_reserve_cma();
+#endif
 	/* do the static reservations first */
 	memblock_remove(PHYS_ADDR_SMC_MEM, PHYS_ADDR_SMC_SIZE);
 	memblock_remove(PHYS_ADDR_DUCATI_MEM, PHYS_ADDR_DUCATI_SIZE);
-#endif
 
 	/* ipu needs to recognize secure input buffer area as well */
 	omap_ipu_set_static_mempool(PHYS_ADDR_DUCATI_MEM,
