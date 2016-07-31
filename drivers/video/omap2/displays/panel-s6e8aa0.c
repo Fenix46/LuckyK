@@ -37,15 +37,15 @@
 #include <linux/i2c.h>
 #include <linux/uaccess.h>
 
-#ifdef CONFIG_COLOR_CONTROL
-#include <linux/color_control.h>
-#endif
 
 #include <video/omapdss.h>
 
 #include <linux/platform_data/panel-s6e8aa0.h>
 
 #include "../dss/dss.h"
+
+/* DSI Command Virtual channel */
+#define CMD_VC_CHANNEL 1
 
 #define V1_ADJ_MAX 140
 #define V255_ADJ_MAX 430
@@ -65,6 +65,9 @@ enum {
 
 #define DRIVER_NAME "s6e8aa0_i2c"
 #define DEVICE_NAME "s6e8aa0_i2c"
+
+static int s6e8aa0_update(struct omap_dss_device *dssdev,
+		      u16 x, u16 y, u16 w, u16 h);
 
 static struct omap_video_timings s6e8aa0_timings = {
 	.x_res = 720,
@@ -132,11 +135,8 @@ struct s6e8aa0_data {
 	struct omap_dss_device *dssdev;
 	struct backlight_device *bldev;
 	struct dentry *debug_dir;
-
-	int channel0;
-	int channel1;
-
 	bool enabled;
+        int channel;
 	u8 rotate;
 	bool mirror;
 	bool use_dsi_bl;
@@ -187,44 +187,39 @@ const u8 s6e8aa0_mtp_lock[] = {
 	0xA5,
 };
 
-#ifdef CONFIG_COLOR_CONTROL
-struct omap_dss_device * lcd_dev;
-
-struct s6e8aa0_data * s6_data;
-
-int v1_offset[3] = {0, 0, 0};
-#endif
-
-static int s6e8aa0_write_reg(struct s6e8aa0_data *s6, u8 reg, u8 val)
+static int s6e8aa0_write_reg(struct omap_dss_device *dssdev, u8 reg, u8 val)
 {
 	u8 buf[2];
 	buf[0] = reg;
 	buf[1] = val;
 
-	return dsi_vc_dcs_write(s6->dssdev, s6->channel1, buf, 2);
+	return dsi_vc_dcs_write(dssdev, 1, buf, 2);
 }
 
-static int s6e8aa0_write_block(struct s6e8aa0_data *s6, const u8 *data, int len)
+static int s6e8aa0_write_block(struct omap_dss_device *dssdev, const u8 *data, int len)
 {
 	// XXX: dsi_vc_dsc_write should take a const u8 *
-	return dsi_vc_dcs_write(s6->dssdev, s6->channel1, (u8 *)data, len);
+	return dsi_vc_dcs_write(dssdev, 1, (u8 *)data, len);
 }
 
-static int s6e8aa0_write_block_nosync(struct s6e8aa0_data *s6, const u8 *data, int len)
+static int s6e8aa0_write_block_nosync(struct omap_dss_device *dssdev,
+				      const u8 *data, int len)
 {
-	return dsi_vc_dcs_write_nosync(s6->dssdev, s6->channel1, (u8 *)data, len);
+	return dsi_vc_dcs_write_nosync(dssdev, 1, (u8 *)data, len);
 }
 
-static int s6e8aa0_read_block(struct s6e8aa0_data *s6, u8 cmd, u8 *data, int len)
+static int s6e8aa0_read_block(struct omap_dss_device *dssdev,
+			      u8 cmd, u8 *data, int len)
 {
-	return dsi_vc_generic_read_1(s6->dssdev, s6->channel1, cmd, data, len);
+	return dsi_vc_dcs_read(dssdev, 1, cmd, data, len);
 }
 
-static void s6e8aa0_write_sequence(struct s6e8aa0_data *s6, const struct s6e8aa0_sequence_entry *seq, int seq_len)
+static void s6e8aa0_write_sequence(struct omap_dss_device *dssdev,
+	const struct s6e8aa0_sequence_entry *seq, int seq_len)
 {
 	while (seq_len--) {
 		if (seq->cmd_len)
-			s6e8aa0_write_block(s6, seq->cmd, seq->cmd_len);
+			s6e8aa0_write_block(dssdev, seq->cmd, seq->cmd_len);
 		if (seq->msleep)
 			msleep(seq->msleep);
 		seq++;
@@ -339,10 +334,6 @@ static u32 s6e8aa0_table_lookup(u32 b, int c,
 	} else {
 		vl = table[i - 1].v[c];
 		tmp = (u64)vh * (b - bl) + (u64)vl * (bh - b);
-		if ((bh-bl) == 0) {
-		  pr_info("[imoseyon] %s: whoa wtf\n", __func__);
-		  return b;
-		}
 		do_div(tmp, bh - bl);
 		ret = tmp;
 	}
@@ -769,11 +760,7 @@ static void s6e8aa0_setup_gamma_regs(struct s6e8aa0_data *s6, u8 gamma_regs[],
 				__func__, adj, v0, v[V1], c);
 			adj = clamp_t(int, adj, adj_min, adj_max);
 		}
-#ifdef CONFIG_COLOR_CONTROL
-		gamma_regs[gamma_reg_index(c, V1)] = min(max(adj +  v1_offset[c], 0), 255);
-#else
 		gamma_regs[gamma_reg_index(c, V1)] = adj;
-#endif
 		v[V1] = v1adj_to_v1(adj + offset, v0);
 
 		v[V255] = s6e8aa0_gamma_lookup(s6, brightness, BV_255, c);
@@ -851,9 +838,9 @@ static void s6e8aa0_update_acl_set(struct omap_dss_device *dssdev)
 
 		acl = &pdata->acl_table[i];
 		if (s6->acl_cur != acl->acl_val) {
-			s6e8aa0_write_block_nosync(s6, acl->regs,
+			s6e8aa0_write_block_nosync(dssdev, acl->regs,
 				sizeof(acl->regs));
-			s6e8aa0_write_reg(s6, 0xC0,
+			s6e8aa0_write_reg(dssdev, 0xC0,
 				0x01 | (s6->acl_average << 4)); /* ACL ON */
 
 			s6->acl_cur = acl->acl_val;
@@ -861,7 +848,7 @@ static void s6e8aa0_update_acl_set(struct omap_dss_device *dssdev)
 	} else {
 		if (s6->acl_cur != 0) {
 			s6->acl_cur = 0;
-			s6e8aa0_write_reg(s6, 0xC0, 0x00); /* ACL OFF */
+			s6e8aa0_write_reg(dssdev, 0xC0, 0x00); /* ACL OFF */
 		}
 	}
 	pr_debug("%s : cur_acl=%d, %d\n", __func__, s6->acl_cur,
@@ -906,7 +893,7 @@ static void s6e8aa0_update_elvss(struct omap_dss_device *dssdev)
 
 	elvss_cmd[2] = elvss;
 
-	s6e8aa0_write_block(s6, elvss_cmd, sizeof(elvss_cmd));
+	s6e8aa0_write_block(dssdev, elvss_cmd, sizeof(elvss_cmd));
 	pr_debug("%s - brightness : %d, cd : %d, elvss : %02x\n",
 					__func__, s6->bl, cd, elvss);
 	return;
@@ -925,11 +912,11 @@ static int s6e8aa0_update_brightness(struct omap_dss_device *dssdev)
 	dy_regs[2][0] = 0xba;
 
 	s6e8aa0_setup_gamma_regs(s6, gamma_regs + 2, dy_regs);
-	s6e8aa0_write_block_nosync(s6, gamma_regs, sizeof(gamma_regs));
-	s6e8aa0_write_block_nosync(s6, dy_regs[0], sizeof(dy_regs[0]));
-	s6e8aa0_write_block_nosync(s6, dy_regs[1], sizeof(dy_regs[1]));
-	s6e8aa0_write_block_nosync(s6, dy_regs[2], sizeof(dy_regs[2]));
-	s6e8aa0_write_reg(s6, 0xF7, 0x01);
+	s6e8aa0_write_block_nosync(dssdev, gamma_regs, sizeof(gamma_regs));
+	s6e8aa0_write_block_nosync(dssdev, dy_regs[0], sizeof(dy_regs[0]));
+	s6e8aa0_write_block_nosync(dssdev, dy_regs[1], sizeof(dy_regs[1]));
+	s6e8aa0_write_block_nosync(dssdev, dy_regs[2], sizeof(dy_regs[2]));
+	s6e8aa0_write_reg(dssdev, 0xF7, 0x01);
 
 	s6e8aa0_update_acl_set(dssdev);
 	s6e8aa0_update_elvss(dssdev);
@@ -1131,23 +1118,6 @@ static void s6e8aa0_adjust_brightness_from_mtp(struct s6e8aa0_data *s6)
 	     sizeof(*s6->brightness_table), s6e8aa0_cmp_gamma_entry, NULL);
 }
 
-#ifdef CONFIG_COLOR_CONTROL
-void colorcontrol_update(bool multiplier_updated)
-{
-    if (multiplier_updated)
-	s6e8aa0_adjust_brightness_from_mtp(s6_data);
-
-    if (lcd_dev->state == OMAP_DSS_DISPLAY_ACTIVE) {
-	dsi_bus_lock(lcd_dev);
-	s6e8aa0_update_brightness(lcd_dev);
-	dsi_bus_unlock(lcd_dev);
-    }
-
-    return;
-}
-EXPORT_SYMBOL(colorcontrol_update);
-#endif
-
 static s16 s9_to_s16(s16 v)
 {
 	return (s16)(v << 7) >> 7;
@@ -1164,10 +1134,10 @@ static void s6e8aa0_read_id_info(struct s6e8aa0_data *s6)
 	int ret;
 	u8 cmd = 0xD1;
 
-	dsi_vc_set_max_rx_packet_size(dssdev, s6->channel1, 3);
-	ret = s6e8aa0_read_block(s6, cmd, s6->panel_id,
+	dsi_vc_set_max_rx_packet_size(dssdev, 1, 3);
+	ret = s6e8aa0_read_block(dssdev, cmd, s6->panel_id,
 					ARRAY_SIZE(s6->panel_id));
-	dsi_vc_set_max_rx_packet_size(dssdev, s6->channel1, 1);
+	dsi_vc_set_max_rx_packet_size(dssdev, 1, 1);
 	if (ret < 0) {
 		pr_err("%s: Failed to read id data\n", __func__);
 		return;
@@ -1182,12 +1152,12 @@ static void s6e8aa0_read_mtp_info(struct s6e8aa0_data *s6, int b)
 	u8 cmd = b ? 0xD3 : 0xD4;
 	struct omap_dss_device *dssdev = s6->dssdev;
 
-	s6e8aa0_write_block(s6, s6e8aa0_mtp_unlock,
+	s6e8aa0_write_block(dssdev, s6e8aa0_mtp_unlock,
 			    ARRAY_SIZE(s6e8aa0_mtp_unlock));
-	dsi_vc_set_max_rx_packet_size(dssdev, s6->channel1, 24);
-	ret = s6e8aa0_read_block(s6, cmd, mtp_data, ARRAY_SIZE(mtp_data));
-	dsi_vc_set_max_rx_packet_size(dssdev, s6->channel1, 1);
-	s6e8aa0_write_block(s6, s6e8aa0_mtp_lock,
+	dsi_vc_set_max_rx_packet_size(dssdev, 1, 24);
+	ret = s6e8aa0_read_block(dssdev, cmd, mtp_data, ARRAY_SIZE(mtp_data));
+	dsi_vc_set_max_rx_packet_size(dssdev, 1, 1);
+	s6e8aa0_write_block(dssdev, s6e8aa0_mtp_lock,
 			    ARRAY_SIZE(s6e8aa0_mtp_lock));
 	if (ret < 0) {
 		pr_err("%s: Failed to read mtp data\n", __func__);
@@ -1588,7 +1558,6 @@ static int s6e8aa0_probe(struct omap_dss_device *dssdev)
 
 	dssdev->panel.config = OMAP_DSS_LCD_TFT;
 	dssdev->panel.timings = s6e8aa0_timings;
-	dssdev->panel.dsi_pix_fmt = bpp_to_datatype(dssdev->ctrl.pixel_size);
 
 	dssdev->ctrl.pixel_size = 24;
 	dssdev->panel.acbi = 0;
@@ -1622,25 +1591,9 @@ static int s6e8aa0_probe(struct omap_dss_device *dssdev)
 
 	mutex_init(&s6->lock);
 
-	dev_set_drvdata(&dssdev->dev, s6);
-
-	ret = omap_dsi_request_vc(dssdev, &s6->channel0);
-	if (ret)
-		dev_err(&dssdev->dev, "failed to get virtual channel 0\n");
-
-	ret = omap_dsi_set_vc_id(dssdev, s6->channel0, 0);
-	if (ret)
-		dev_err(&dssdev->dev, "failed to set VC_ID0\n");
-
-	ret = omap_dsi_request_vc(dssdev, &s6->channel1);
-	if (ret)
-		dev_err(&dssdev->dev, "failed to get virtual channel 1\n");
-
-	ret = omap_dsi_set_vc_id(dssdev, s6->channel1, 0);
-	if (ret)
-		dev_err(&dssdev->dev, "failed to set VC_ID1\n");
-
 	atomic_set(&s6->do_update, 0);
+
+	dev_set_drvdata(&dssdev->dev, s6);
 
 	/* Register DSI backlight  control */
 	s6->bldev = backlight_device_register("s6e8aa0", &dssdev->dev, dssdev,
@@ -1674,14 +1627,6 @@ static int s6e8aa0_probe(struct omap_dss_device *dssdev)
 	if (cpu_is_omap44xx())
 		s6->force_update = true;
 
-#ifdef CONFIG_COLOR_CONTROL
-	lcd_dev = dssdev;
-	s6_data = s6;
-
-	colorcontrol_register_offset(v1_offset);
-	colorcontrol_register_multiplier(s6->pdata->factory_info->color_adj.mult);
-#endif
-
 	dev_dbg(&dssdev->dev, "s6e8aa0_probe\n");
 	return ret;
 
@@ -1700,8 +1645,6 @@ static void s6e8aa0_remove(struct omap_dss_device *dssdev)
 	sysfs_remove_group(&s6->bldev->dev.kobj, &s6e8aa0_bl_attr_group);
 	debugfs_remove_recursive(s6->debug_dir);
 	backlight_device_unregister(s6->bldev);
-	omap_dsi_release_vc(dssdev, s6->channel0);
-	omap_dsi_release_vc(dssdev, s6->channel1);
 	mutex_destroy(&s6->lock);
 	gpio_free(s6->pdata->reset_gpio);
 	kfree(s6);
@@ -1723,14 +1666,14 @@ static void s6e8aa0_config(struct omap_dss_device *dssdev)
 		s6e8aa0_adjust_brightness_from_mtp(s6);
 	}
 
-	s6e8aa0_write_sequence(s6, pdata->seq_display_set,
+	s6e8aa0_write_sequence(dssdev, pdata->seq_display_set,
 			       pdata->seq_display_set_size);
 
 	s6->acl_cur = 0; /* make sure acl table and elvss value gets written */
 	s6->elvss_cur_i = ~0;
 	s6e8aa0_update_brightness(dssdev);
 
-	s6e8aa0_write_sequence(s6, pdata->seq_etc_set,
+	s6e8aa0_write_sequence(dssdev, pdata->seq_etc_set,
 			       pdata->seq_etc_set_size);
 }
 
@@ -1738,8 +1681,6 @@ static int s6e8aa0_power_on(struct omap_dss_device *dssdev)
 {
 	struct s6e8aa0_data *s6 = dev_get_drvdata(&dssdev->dev);
 	int r = 0;
-
-	dsi_bus_lock(dssdev);
 
 	/* At power on the first vsync has not been received yet*/
 	dssdev->first_vsync = false;
@@ -1751,46 +1692,81 @@ static int s6e8aa0_power_on(struct omap_dss_device *dssdev)
 		r = omapdss_dsi_display_enable(dssdev);
 		if (r) {
 			dev_err(&dssdev->dev, "failed to enable DSI\n");
-			dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
-			goto err;
+			goto out;
 		}
 
+		/* reset s6e8aa0 bridge */
 		s6e8aa0_hw_reset(dssdev);
 
-		/* XXX */
-		msleep(100);
-		omapdss_dsi_vc_enable_hs(dssdev, s6->channel0, true);
-		omapdss_dsi_vc_enable_hs(dssdev, s6->channel1, true);
+			/* XXX */
+			msleep(100);
+			s6e8aa0_config(dssdev);
 
-		s6e8aa0_config(dssdev);
+			r = dsi_enable_video_output(dssdev, s6->channel);
+			if (r) {
+			       dev_err(&dssdev->dev, "failed to enable panlel\n"); 
+                               goto out;
+		}
 
-		dsi_enable_video_output(dssdev, s6->channel0);
-		// HASH: TODO dsi_video_mode_enable(dssdev, 0x3E); /* DSI_DT_PXLSTREAM_24BPP_PACKED; */
-	} else {
-		dssdev->skip_init = false;
-		r = dss_mgr_enable(dssdev->manager);
-	}
 		s6->enabled = 1;
-err:
-	dsi_bus_unlock(dssdev);
+	}
+
+	if(dssdev->skip_init)
+		dssdev->skip_init = false;
+
+out:
 	return r;
 }
 
 static void s6e8aa0_power_off(struct omap_dss_device *dssdev)
 {
 	struct s6e8aa0_data *s6 = dev_get_drvdata(&dssdev->dev);
-	dsi_disable_video_output(dssdev, s6->channel0);
-
-	dsi_bus_lock(dssdev);
 
 	gpio_set_value(s6->pdata->reset_gpio, 0);
 	msleep(10);
 
 	s6->enabled = 0;
-	omapdss_dsi_display_disable(dssdev, false, false);
+	omapdss_dsi_display_disable(dssdev, 0, 0);
 
 	if (s6->pdata->set_power)
 		s6->pdata->set_power(false);
+
+}
+
+static int s6e8aa0_start(struct omap_dss_device *dssdev)
+{
+	int r = 0;
+	unsigned long pclk;
+
+	dsi_bus_lock(dssdev);
+
+	r = s6e8aa0_power_on(dssdev);
+
+	dsi_bus_unlock(dssdev);
+
+	if (r) {
+		dev_dbg(&dssdev->dev, "enable failed\n");
+		dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
+	} else {
+		dssdev->state = OMAP_DSS_DISPLAY_ACTIVE;
+                r = dss_mgr_enable(dssdev->manager);
+	}
+
+	/* fixup pclk based on pll config */
+	pclk = dispc_mgr_pclk_rate(dssdev->channel);
+	if (pclk)
+		dssdev->panel.timings.pixel_clock = (pclk + 500) / 1000;
+
+	return r;
+}
+
+static void s6e8aa0_stop(struct omap_dss_device *dssdev)
+{
+	dss_mgr_disable(dssdev->manager); 
+
+	dsi_bus_lock(dssdev);
+
+	s6e8aa0_power_off(dssdev);
 
 	dsi_bus_unlock(dssdev);
 }
@@ -1803,7 +1779,7 @@ static void s6e8aa0_disable(struct omap_dss_device *dssdev)
 
 	mutex_lock(&s6->lock);
 	if (dssdev->state == OMAP_DSS_DISPLAY_ACTIVE)
-		s6e8aa0_power_off(dssdev);
+		s6e8aa0_stop(dssdev);
 
 	dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
 	mutex_unlock(&s6->lock);
@@ -1813,7 +1789,6 @@ static int s6e8aa0_enable(struct omap_dss_device *dssdev)
 {
 	struct s6e8aa0_data *s6 = dev_get_drvdata(&dssdev->dev);
 	int ret;
-	unsigned long pclk;
 
 	dev_dbg(&dssdev->dev, "enable\n");
 
@@ -1823,19 +1798,7 @@ static int s6e8aa0_enable(struct omap_dss_device *dssdev)
 		goto out;
 	}
 
-	ret = s6e8aa0_power_on(dssdev);
-	if (ret) {
-		dev_dbg(&dssdev->dev, "enable failed\n");
-		dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
-	} else {
-		dssdev->state = OMAP_DSS_DISPLAY_ACTIVE;
-	}
-
-	/* fixup pclk based on pll config */
-	pclk = dispc_mgr_pclk_rate(dssdev->channel);
-	if (pclk)
-		dssdev->panel.timings.pixel_clock = (pclk + 500) / 1000;
-
+	ret = s6e8aa0_start(dssdev);
 out:
 	mutex_unlock(&s6->lock);
 	return ret;
@@ -1865,7 +1828,7 @@ static int s6e8aa0_update(struct omap_dss_device *dssdev,
 	}
 
 	/* We use VC(0) for VideoPort Data and VC(1) for commands */
-	r = omap_dsi_update(dssdev, s6->channel0, s6e8aa0_framedone_cb, dssdev);
+	r = omap_dsi_update(dssdev, s6->channel, s6e8aa0_framedone_cb, dssdev);
 	if (r)
 		goto err;
 
@@ -1885,7 +1848,6 @@ static int s6e8aa0_sync(struct omap_dss_device *dssdev)
 	return 0;
 }
 
-// HASH: set/get update_mode was removed
 #if 0
 static int s6e8aa0_set_update_mode(struct omap_dss_device *dssdev,
 			       enum omap_dss_update_mode mode)
@@ -1902,6 +1864,7 @@ static int s6e8aa0_set_update_mode(struct omap_dss_device *dssdev,
 
 	return 0;
 }
+
 
 static enum omap_dss_update_mode s6e8aa0_get_update_mode(struct omap_dss_device
 						     *dssdev)
@@ -1920,7 +1883,6 @@ static int s6e8aa0_resume(struct omap_dss_device *dssdev)
 {
 	struct s6e8aa0_data *s6 = dev_get_drvdata(&dssdev->dev);
 	int ret;
-	unsigned long pclk;
 
 	dev_dbg(&dssdev->dev, "resume\n");
 
@@ -1930,19 +1892,7 @@ static int s6e8aa0_resume(struct omap_dss_device *dssdev)
 		goto out;
 	}
 
-	ret = s6e8aa0_power_on(dssdev);
-	if (ret) {
-		dev_dbg(&dssdev->dev, "resume failed\n");
-		dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
-	} else {
-		dssdev->state = OMAP_DSS_DISPLAY_ACTIVE;
-	}
-
-	/* fixup pclk based on pll config */
-	pclk = dispc_mgr_pclk_rate(dssdev->channel);
-	if (pclk)
-		dssdev->panel.timings.pixel_clock = (pclk + 500) / 1000;
-
+	ret = s6e8aa0_start(dssdev);
 out:
 	mutex_unlock(&s6->lock);
 	return ret;
@@ -1961,7 +1911,7 @@ static int s6e8aa0_suspend(struct omap_dss_device *dssdev)
 		goto out;
 	}
 
-	s6e8aa0_power_off(dssdev);
+	s6e8aa0_stop(dssdev);
 	dssdev->state = OMAP_DSS_DISPLAY_SUSPENDED;
 out:
 	mutex_unlock(&s6->lock);
