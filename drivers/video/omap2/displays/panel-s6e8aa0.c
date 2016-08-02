@@ -37,7 +37,8 @@
 #include <linux/i2c.h>
 #include <linux/uaccess.h>
 
-
+#include <video/omap-panel-dsi.h>
+#include <video/mipi_display.h>
 #include <video/omapdss.h>
 
 #include <linux/platform_data/panel-s6e8aa0.h>
@@ -193,25 +194,25 @@ static int s6e8aa0_write_reg(struct omap_dss_device *dssdev, u8 reg, u8 val)
 	buf[0] = reg;
 	buf[1] = val;
 
-	return dsi_vc_dcs_write(dssdev, 1, buf, 2);
+	return dsi_vc_dcs_write(dssdev, 0, buf, 2);
 }
 
 static int s6e8aa0_write_block(struct omap_dss_device *dssdev, const u8 *data, int len)
 {
 	// XXX: dsi_vc_dsc_write should take a const u8 *
-	return dsi_vc_dcs_write(dssdev, 1, (u8 *)data, len);
+	return dsi_vc_dcs_write(dssdev, 0, (u8 *)data, len);
 }
 
 static int s6e8aa0_write_block_nosync(struct omap_dss_device *dssdev,
 				      const u8 *data, int len)
 {
-	return dsi_vc_dcs_write_nosync(dssdev, 1, (u8 *)data, len);
+	return dsi_vc_dcs_write_nosync(dssdev, 0, (u8 *)data, len);
 }
 
 static int s6e8aa0_read_block(struct omap_dss_device *dssdev,
 			      u8 cmd, u8 *data, int len)
 {
-	return dsi_vc_dcs_read(dssdev, 1, cmd, data, len);
+	return dsi_vc_dcs_read(dssdev, 0, cmd, data, len);
 }
 
 static void s6e8aa0_write_sequence(struct omap_dss_device *dssdev,
@@ -1558,6 +1559,7 @@ static int s6e8aa0_probe(struct omap_dss_device *dssdev)
 
 	dssdev->panel.config = OMAP_DSS_LCD_TFT;
 	dssdev->panel.timings = s6e8aa0_timings;
+	dssdev->panel.dsi_pix_fmt = OMAP_DSS_DSI_FMT_RGB888;
 
 	dssdev->ctrl.pixel_size = 24;
 	dssdev->panel.acbi = 0;
@@ -1665,6 +1667,9 @@ static void s6e8aa0_config(struct omap_dss_device *dssdev)
 		s6e8aa0_read_mtp_info(s6, 1);
 		s6e8aa0_adjust_brightness_from_mtp(s6);
 	}
+
+	struct panel_regulator *regulators;
+	int num_regulators;
 
 	s6e8aa0_write_sequence(dssdev, pdata->seq_display_set,
 			       pdata->seq_display_set_size);
