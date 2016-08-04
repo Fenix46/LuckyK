@@ -768,7 +768,12 @@ static int virtio_pci_restore(struct device *dev)
 }
 
 static const struct dev_pm_ops virtio_pci_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(virtio_pci_freeze, virtio_pci_restore)
+	.suspend	= virtio_pci_freeze,
+	.resume		= virtio_pci_restore,
+	.freeze		= virtio_pci_freeze,
+	.thaw		= virtio_pci_restore,
+	.restore	= virtio_pci_restore,
+	.poweroff	= virtio_pci_freeze,
 };
 #endif
 
