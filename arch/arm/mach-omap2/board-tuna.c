@@ -663,7 +663,7 @@ static int __init tuna_i2c_init(void)
 	 * This will allow unused regulator to be shutdown. This flag
 	 * should be set in the board file. Before regulators are registered.
 	 */
-	regulator_has_full_constraints();
+	//regulator_has_full_constraints();
 
 	omap4_pmic_init("twl6030", &tuna_twldata,
 			&twl6040_data, OMAP44XX_IRQ_SYS_2N);
@@ -1002,7 +1002,7 @@ static ssize_t tuna_soc_msv_show(struct kobject *kobj,
 static const char *omap_types[] = {
 	[OMAP2_DEVICE_TYPE_TEST]	= "TST",
 	[OMAP2_DEVICE_TYPE_EMU]		= "EMU",
-	[OMAP2_DEVICE_TYPE_SEC]		= "HS",
+	[OMAP2_DEVICE_TYPE_SEC] 	= "HS",
 	[OMAP2_DEVICE_TYPE_GP]		= "GP",
 	[OMAP2_DEVICE_TYPE_BAD]		= "BAD",
 };

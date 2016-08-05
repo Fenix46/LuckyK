@@ -42,66 +42,9 @@ struct regulator *tuna_oled_reg;
 struct regulator *tuna_oled_reg_iovcc;
 static unsigned int panel_id;
 
-struct panel_regulator {
-	struct regulator *regulator;
-	const char *name;
-	int min_uV;
-	int max_uV;
-};
-
-static void free_regulators(struct panel_regulator *regulators, int n)
-{
-	int i;
-
-	for (i = 0; i < n; i++) {
-		/* disable/put in reverse order */
-		regulator_disable(regulators[n - i - 1].regulator);
-		regulator_put(regulators[n - i - 1].regulator);
-	}
-}
-
 static void tuna_oled_set_power(struct omap_dss_device *dssdev,
                               struct panel_regulator *regulators, int n, bool enable)
 {
-	int r, i, v;
-
-	for (i = 0; i < n; i++) {
-		struct regulator *reg;
-
-		reg = regulator_get(&dssdev->dev, regulators[i].name);
-		if (IS_ERR(reg)) {
-			dev_err(&dssdev->dev, "failed to get regulator %s\n",
-				regulators[i].name);
-			r = PTR_ERR(reg);
-			goto err;
-		}
-
-		/* FIXME: better handling of fixed vs. variable regulators */
-		v = regulator_get_voltage(reg);
-		if (v < regulators[i].min_uV || v > regulators[i].max_uV) {
-			r = regulator_set_voltage(reg, regulators[i].min_uV,
-						regulators[i].max_uV);
-			if (r) {
-				dev_err(&dssdev->dev,
-					"failed to set regulator %s voltage\n",
-					regulators[i].name);
-				regulator_put(reg);
-				goto err;
-			}
-		}
-
-		r = regulator_enable(reg);
-		if (r) {
-			dev_err(&dssdev->dev, "failed to enable regulator %s\n",
-				regulators[i].name);
-			regulator_put(reg);
-			goto err;
-		}
-
-		regulators[i].regulator = reg;
-	}
-	return 0;
-
 	if (IS_ERR_OR_NULL(tuna_oled_reg)) {
 		tuna_oled_reg = regulator_get(NULL, "vlcd");
 		if (IS_ERR_OR_NULL(tuna_oled_reg)) {
@@ -132,10 +75,6 @@ static void tuna_oled_set_power(struct omap_dss_device *dssdev,
 		else
 			regulator_disable(tuna_oled_reg);
 	}
-err:
-	free_regulators(regulators, i);
-
-        return r;
 }
 
 static const struct s6e8aa0_acl_parameters tuna_oled_acl[] = {

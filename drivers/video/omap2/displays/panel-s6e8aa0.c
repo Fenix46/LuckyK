@@ -46,7 +46,7 @@
 #include "../dss/dss.h"
 
 /* DSI Command Virtual channel */
-#define CMD_VC_CHANNEL 1
+#define SCH 1
 
 #define V1_ADJ_MAX 140
 #define V255_ADJ_MAX 430
@@ -194,25 +194,45 @@ static int s6e8aa0_write_reg(struct omap_dss_device *dssdev, u8 reg, u8 val)
 	buf[0] = reg;
 	buf[1] = val;
 
-	return dsi_vc_dcs_write(dssdev, 0, buf, 2);
+	return dsi_vc_dcs_write(dssdev, 1, buf, 2);
 }
 
-static int s6e8aa0_write_block(struct omap_dss_device *dssdev, const u8 *data, int len)
+static int s6e8aa0_write_block_0(struct omap_dss_device *dssdev, const u8 *data, int len)
 {
 	// XXX: dsi_vc_dsc_write should take a const u8 *
-	return dsi_vc_dcs_write(dssdev, 0, (u8 *)data, len);
+	return dsi_vc_dcs_write(dssdev, 1, (u8 *)data, len);
+}
+
+static int s6e8aa0_write_block_1(struct omap_dss_device *dssdev, const u8 *data, int len)
+{
+	u8 buf[2];
+	buf[0] = data;
+	buf[1] = len;
+	return dsi_vc_dcs_write(dssdev, 1, (u8 *)data, len);
 }
 
 static int s6e8aa0_write_block_nosync(struct omap_dss_device *dssdev,
 				      const u8 *data, int len)
 {
-	return dsi_vc_dcs_write_nosync(dssdev, 0, (u8 *)data, len);
+	return dsi_vc_dcs_write_nosync(dssdev, 1, (u8 *)data, len);
 }
 
 static int s6e8aa0_read_block(struct omap_dss_device *dssdev,
 			      u8 cmd, u8 *data, int len)
 {
-	return dsi_vc_dcs_read(dssdev, 0, cmd, data, len);
+	struct s6e8aa0_data *s6 = dev_get_drvdata(&dssdev->dev);
+
+	int r;
+	u8 buf[1];
+
+	r = dsi_vc_dcs_read(s6->dssdev, s6->channel, cmd, buf, 1);
+
+	if (r < 0)
+		return r;
+
+	*data = buf[0];
+
+	return 0;
 }
 
 static void s6e8aa0_write_sequence(struct omap_dss_device *dssdev,
@@ -220,7 +240,7 @@ static void s6e8aa0_write_sequence(struct omap_dss_device *dssdev,
 {
 	while (seq_len--) {
 		if (seq->cmd_len)
-			s6e8aa0_write_block(dssdev, seq->cmd, seq->cmd_len);
+			s6e8aa0_write_block_1(dssdev, seq->cmd, seq->cmd_len);
 		if (seq->msleep)
 			msleep(seq->msleep);
 		seq++;
@@ -894,7 +914,7 @@ static void s6e8aa0_update_elvss(struct omap_dss_device *dssdev)
 
 	elvss_cmd[2] = elvss;
 
-	s6e8aa0_write_block(dssdev, elvss_cmd, sizeof(elvss_cmd));
+	s6e8aa0_write_block_0(dssdev, elvss_cmd, sizeof(elvss_cmd));
 	pr_debug("%s - brightness : %d, cd : %d, elvss : %02x\n",
 					__func__, s6->bl, cd, elvss);
 	return;
@@ -1153,12 +1173,12 @@ static void s6e8aa0_read_mtp_info(struct s6e8aa0_data *s6, int b)
 	u8 cmd = b ? 0xD3 : 0xD4;
 	struct omap_dss_device *dssdev = s6->dssdev;
 
-	s6e8aa0_write_block(dssdev, s6e8aa0_mtp_unlock,
+	s6e8aa0_write_block_1(dssdev, s6e8aa0_mtp_unlock,
 			    ARRAY_SIZE(s6e8aa0_mtp_unlock));
 	dsi_vc_set_max_rx_packet_size(dssdev, 1, 24);
 	ret = s6e8aa0_read_block(dssdev, cmd, mtp_data, ARRAY_SIZE(mtp_data));
 	dsi_vc_set_max_rx_packet_size(dssdev, 1, 1);
-	s6e8aa0_write_block(dssdev, s6e8aa0_mtp_lock,
+	s6e8aa0_write_block_0(dssdev, s6e8aa0_mtp_lock,
 			    ARRAY_SIZE(s6e8aa0_mtp_lock));
 	if (ret < 0) {
 		pr_err("%s: Failed to read mtp data\n", __func__);
@@ -1668,9 +1688,6 @@ static void s6e8aa0_config(struct omap_dss_device *dssdev)
 		s6e8aa0_adjust_brightness_from_mtp(s6);
 	}
 
-	struct panel_regulator *regulators;
-	int num_regulators;
-
 	s6e8aa0_write_sequence(dssdev, pdata->seq_display_set,
 			       pdata->seq_display_set_size);
 
@@ -1849,7 +1866,17 @@ err:
 
 static int s6e8aa0_sync(struct omap_dss_device *dssdev)
 {
-	/* TODO? */
+	struct s6e8aa0_data *s6 = dev_get_drvdata(&dssdev->dev);
+
+	dev_dbg(&dssdev->dev, "sync\n");
+
+	mutex_lock(&s6->lock);
+	dsi_bus_lock(dssdev);
+	dsi_bus_unlock(dssdev);
+	mutex_unlock(&s6->lock);
+
+	dev_dbg(&dssdev->dev, "sync done\n");
+
 	return 0;
 }
 
