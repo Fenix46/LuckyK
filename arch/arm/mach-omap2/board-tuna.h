@@ -51,6 +51,7 @@ void modem_toro_init(void);
 
 struct omap_ion_platform_data;
 void tuna_android_display_setup(void);
+void tuna_lcd_init(void);
 
 enum pogo_power_state {
 	POGO_POWER_DISCONNECTED,

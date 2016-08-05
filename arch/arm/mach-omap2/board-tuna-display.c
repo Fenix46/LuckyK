@@ -15,8 +15,14 @@
 #include <linux/err.h>
 #include <linux/gpio.h>
 #include <linux/kernel.h>
+#include <linux/delay.h>
+#include <linux/init.h>
+#include <linux/io.h>
 #include <linux/omapfb.h>
 #include <linux/regulator/consumer.h>
+#include <linux/leds-omap4430sdp-display.h>
+#include <linux/memblock.h>
+#include <linux/i2c/twl.h>
 
 #include <linux/platform_data/panel-s6e8aa0.h>
 
@@ -32,6 +38,16 @@
 #include "mux.h"
 
 #define TUNA_GPIO_MLCD_RST		23
+#define GPIO_UART_DDC_SWITCH	182
+
+#define HDMI_DDC_SCL_PULLUPRESX	24
+#define HDMI_DDC_SDA_PULLUPRESX	28
+#define HDMI_DDC_DISABLE_PULLUP	1
+#define HDMI_DDC_ENABLE_PULLUP	0
+
+#define LCD_BL_PWR_EN_GPIO		38
+#define LCD_DCR_1V8_GPIO		153
+#define LCD_DCR_1V8_GPIO_EVT1B	27
 
 /* 4.65" Panel ID Info (D1h 1st Para) */
 #define M3		0xA1
@@ -41,6 +57,14 @@
 struct regulator *tuna_oled_reg;
 struct regulator *tuna_oled_reg_iovcc;
 static unsigned int panel_id;
+static bool lcd_supply_requested = false;
+static bool first_boot = true;
+
+struct omap_tablet_panel_data {
+	struct omap_dss_board_info *board_info;
+	struct dsscomp_platform_data *dsscomp_data;
+	struct sgx_omaplfb_platform_data *omaplfb_data;
+};
 
 static void tuna_oled_set_power(struct omap_dss_device *dssdev,
                               struct panel_regulator *regulators, int n, bool enable)
@@ -1057,6 +1081,24 @@ static void tuna_hdmi_mux_init(void)
 	r = ((1 << 24) | (1 << 28)) ;
 	omap4_ctrl_pad_writel(r, OMAP4_CTRL_MODULE_PAD_CORE_CONTROL_I2C_1);
 
+
+
+}
+
+void __init tuna_lcd_init(void)
+{
+	u32 reg;
+
+	gpio_request(LCD_DCR_1V8_GPIO, "lcd_dcr");
+	gpio_direction_output(LCD_DCR_1V8_GPIO, 1);
+
+	/* Enable 5 lanes in DSI1 module, disable pull down */
+	reg = omap4_ctrl_pad_readl(OMAP4_CTRL_MODULE_PAD_CORE_CONTROL_DSIPHY);
+	reg &= ~OMAP4_DSI1_LANEENABLE_MASK;
+	reg |= 0x1f << OMAP4_DSI1_LANEENABLE_SHIFT;
+	reg &= ~OMAP4_DSI1_PIPD_MASK;
+	reg |= 0x1f << OMAP4_DSI1_PIPD_SHIFT;
+	omap4_ctrl_pad_writel(reg, OMAP4_CTRL_MODULE_PAD_CORE_CONTROL_DSIPHY);
 }
 
 static struct omap_dss_hdmi_data tuna_hdmi_data = {
