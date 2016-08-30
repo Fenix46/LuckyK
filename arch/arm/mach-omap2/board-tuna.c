@@ -1393,7 +1393,7 @@ static void __init tuna_reserve(void)
 
 #ifdef CONFIG_ION_OMAP
 	tuna_android_display_setup(get_omap_ion_platform_data());
-	omap_ion_init();
+	omap4_ion_init();
 #else
 	tuna_android_display_setup(NULL);
 #endif
