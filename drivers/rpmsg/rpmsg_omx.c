@@ -120,7 +120,7 @@ static LIST_HEAD(rpmsg_omx_services_list);
 #endif
 #endif
 
-static u32 max_iobufs_addr = ION_1D_VA;
+static u32 max_iobufs_addr;
 
 static int _rpmsg_pa_to_da(struct rpmsg_omx_instance *omx, u32 pa, u32 *da)
 {
