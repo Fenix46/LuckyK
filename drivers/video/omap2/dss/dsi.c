@@ -4175,24 +4175,6 @@ static void dsi_proto_timings(struct omap_dss_device *dssdev)
 	}
 }
 
-#define DSI_DECL_VARS \
-	int __dsi_cb = 0; u32 __dsi_cv = 0;
-
-#define DSI_FLUSH(dsidev, ch) \
-	if (__dsi_cb > 0) { \
-		/*DSSDBG("sending long packet %#010x\n", __dsi_cv);*/ \
-		dsi_write_reg(dsidev, DSI_VC_LONG_PACKET_PAYLOAD(ch), __dsi_cv); \
-		__dsi_cb = __dsi_cv = 0; \
-	}
-
-#define DSI_PUSH(dsidev, ch, data) \
-	do { \
-		__dsi_cv |= (data) << (__dsi_cb * 8); \
-		/*DSSDBG("cv = %#010x, cb = %d\n", __dsi_cv, __dsi_cb);*/ \
-		if (++__dsi_cb > 3) \
-			DSI_FLUSH(dsidev, ch); \
-} while (0)
-
 static void  dsi_handle_lcd_en_timing_pre(struct omap_dss_device *dssdev,
 						bool enable)
 {
@@ -4563,20 +4545,19 @@ static int dsi_display_init_dispc(struct omap_dss_device *dssdev)
 		dispc_mgr_enable_stallmode(dssdev->manager->id, false);
 		dispc_mgr_enable_fifohandcheck(dssdev->manager->id, 0);
 
-	dispc_mgr_set_lcd_display_type(dssdev->manager->id,
-			OMAP_DSS_LCD_DISPLAY_TFT);
-
-	dispc_mgr_set_tft_data_lines(dssdev->manager->id, dssdev->ctrl.pixel_size);
-
 		if (dssdev->dispc_timings) {
 			dispc_mgr_set_lcd_timings(dssdev->manager->id,
-                                                dssdev->dispc_timings);
+						dssdev->dispc_timings);
 		} else {
 			dispc_mgr_set_lcd_timings(dssdev->manager->id,
 						&dssdev->panel.timings);
 		}
 	}
 
+		dispc_mgr_set_lcd_display_type(dssdev->manager->id,
+			OMAP_DSS_LCD_DISPLAY_TFT);
+		dispc_mgr_set_tft_data_lines(dssdev->manager->id,
+			dsi_get_pixel_size(dssdev->panel.dsi_pix_fmt));
 	return 0;
 }
 
