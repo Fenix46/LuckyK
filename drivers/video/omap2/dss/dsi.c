@@ -2422,8 +2422,15 @@ static int dsi_cio_init(struct omap_dss_device *dssdev)
 	if (r)
 		return r;
 
-	/* HS_AUTO_STOP_ENABLE */
-	REG_FLD_MOD(dsidev, DSI_CLK_CTRL, 1, 18, 18);
+	if (cpu_is_omap44xx()) {
+		/* DDR_CLK_ALWAYS_ON */
+                if (dssdev->clocks.dsi.offset_ddr_clk > 0)
+			REG_FLD_MOD(dsidev, DSI_CLK_CTRL, 0, 13, 13);
+		else
+			REG_FLD_MOD(dsidev, DSI_CLK_CTRL, 1, 13, 13);
+        	/* HS_AUTO_STOP_ENABLE */
+        	REG_FLD_MOD(dsidev, DSI_CLK_CTRL, 1, 18, 18);
+        }
 
 	dsi_enable_scp_clk(dsidev);
 
@@ -2538,9 +2545,6 @@ err_scp_clk_dom:
 static void dsi_cio_uninit(struct omap_dss_device *dssdev)
 {
 	struct platform_device *dsidev = dsi_get_dsidev_from_dssdev(dssdev);
-
-	/* DDR_CLK_ALWAYS_ON */
-	REG_FLD_MOD(dsidev, DSI_CLK_CTRL, 0, 13, 13);
 
 	dsi_cio_power(dsidev, DSI_COMPLEXIO_POWER_OFF);
 	dsi_disable_scp_clk(dsidev);
@@ -4173,6 +4177,24 @@ static void dsi_proto_timings(struct omap_dss_device *dssdev)
 		dsi_write_reg(dsidev, DSI_VM_TIMING6, r);
 	}
 }
+
+#define DSI_DECL_VARS \
+	int __dsi_cb = 0; u32 __dsi_cv = 0;
+
+#define DSI_FLUSH(dsidev, ch) \
+	if (__dsi_cb > 0) { \
+		/*DSSDBG("sending long packet %#010x\n", __dsi_cv);*/ \
+		dsi_write_reg(dsidev, DSI_VC_LONG_PACKET_PAYLOAD(ch), __dsi_cv); \
+		__dsi_cb = __dsi_cv = 0; \
+	}
+
+#define DSI_PUSH(dsidev, ch, data) \
+	do { \
+		__dsi_cv |= (data) << (__dsi_cb * 8); \
+		/*DSSDBG("cv = %#010x, cb = %d\n", __dsi_cv, __dsi_cb);*/ \
+		if (++__dsi_cb > 3) \
+			DSI_FLUSH(dsidev, ch); \
+} while (0)
 
 static void  dsi_handle_lcd_en_timing_pre(struct omap_dss_device *dssdev,
 						bool enable)
