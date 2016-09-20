@@ -119,9 +119,10 @@ enum rproc_service_enum {
 	ENTER_SECURE_PLAYBACK = 0x00003000,
 	EXIT_SECURE_PLAYBACK,
 	ENTER_SECURE_PLAYBACK_AFTER_AUTHENTICATION
-#endif
+#else
 	RPROC_ENTER_SECURE_PLAYBACK = 0x00003000,
 	RPROC_EXIT_SECURE_PLAYBACK = 0x00003001,
+#endif
 };
 
 typedef int (*rproc_drm_invoke_service_t)(enum rproc_service_enum service,

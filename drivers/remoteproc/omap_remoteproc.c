@@ -156,7 +156,6 @@ void proc_log_metrics(char *msg)
 		"ducati:def:%s=1;CT;1:HI,timestamp=%lu;TI;1:NR",
 		msg,
 		ts.tv_sec * 1000 + ts.tv_nsec / NSEC_PER_MSEC);
-	log_to_metrics(ANDROID_LOG_INFO, "ducati_metrics", buf);
 }
 
 /**

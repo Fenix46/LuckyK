@@ -1543,11 +1543,6 @@ static int _ocp_softreset(struct omap_hwmod *oh)
 		pr_debug("omap_hwmod: %s: softreset in %d usec\n", oh->name, c);
 	}
 
-	ret = _clear_softreset(oh, &v);
-	if (ret)
-		goto dis_opt_clks;
-	_write_sysconfig(v, oh);
-
 	/*
 	 * XXX add _HWMOD_STATE_WEDGED for modules that don't come back from
 	 * _wait_target_ready() or _reset()

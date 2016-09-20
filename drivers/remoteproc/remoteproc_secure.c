@@ -353,17 +353,6 @@ out:
 	return ret;
 }
 
-void secure_log_metrics(char *msg)
-{
-	struct timespec ts = current_kernel_time();
-	char buf[512];
-	snprintf(buf, sizeof(buf),
-		"ducati:def:%s=1;CT;1:HI,timestamp=%lu;TI;1:NR",
-		msg,
-		ts.tv_sec * 1000 + ts.tv_nsec / NSEC_PER_MSEC);
-	log_to_metrics(ANDROID_LOG_INFO, "ducati_metrics", buf);
-}
-
 /**
  * rproc_secure_boot() - Secure ducati code during boot
  * @rproc: rproc handle
@@ -422,7 +411,6 @@ int rproc_secure_boot(struct rproc *rproc)
 			dev_err(dev, "failed to install firewalls 0x%x\n", ret);
 		else {
 			secure_state = RPROC_SECURE_ON;
-			secure_log_metrics("loaded_in_secure_mode");
 		}
 	} else {
 		secure_state = RPROC_SECURE_OFF;
@@ -495,17 +483,6 @@ void rproc_secure_complete(struct rproc *rproc)
 		complete_all(&secure_reload_complete);
 }
 
-void core_log_metrics(char *msg)
-{
-	struct timespec ts = current_kernel_time();
-	char buf[512];
-	snprintf(buf, sizeof(buf),
-		"ducati:def:%s=1;CT;1:HI,timestamp=%lu;TI;1:NR",
-		msg,
-		ts.tv_sec * 1000 + ts.tv_nsec / NSEC_PER_MSEC);
-	log_to_metrics(ANDROID_LOG_INFO, "ducati_metrics", buf);
-}
-
 /**
  * Resembles rproc_set_secure, but secure state machine handling is
  * sufficiently different during recovery to deem a separate function.
@@ -522,7 +499,6 @@ int rproc_secure_recover(struct rproc *rproc)
 	}
 
 	dev_err(&rproc->dev, "trying to recover %s\n", rproc->name);
-	core_log_metrics("recovering_from_crash");
 
 	if (!secure_params) {
 		/*

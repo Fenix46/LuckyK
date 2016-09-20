@@ -1238,17 +1238,17 @@ serial_omap_ioctl(struct uart_port *uport, unsigned int cmd, unsigned long arg)
 
 	switch (cmd) {
 		case 0x8003 /* ASSERT_BT_WAKE */:
-			bcm_bt_lpm_exit_lpm(uport, 1);
+//			bcm_bt_lpm_exit_lpm(uport, 1);
 			break;
 
 		case 0x8004 /* DEASSERT_BT_WAKE */:
-			bcm_bt_lpm_exit_lpm(uport, 0);
+//			bcm_bt_lpm_exit_lpm(uport, 0);
 			break;
 
 		case 0x8005 /* GET_BT_WAKE_STATE */:
-			if (copy_to_user(argp, &bt_wake_level,
-				sizeof(bt_wake_level)))
-				return -EFAULT;
+//			if (copy_to_user(argp, &bt_wake_level,
+//				sizeof(bt_wake_level)))
+//				return -EFAULT;
 			break;
 
 		default:

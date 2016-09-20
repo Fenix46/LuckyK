@@ -293,25 +293,6 @@ obj-$(CONFIG_MACH_TUNA)		+= board-tuna.o \
 					   board-tuna-pogo.o \
 					   board-tuna-usbhost.o
 
-obj-$(CONFIG_MACH_OMAP4_BOWSER)		+= board-bowser-idme.o
-obj-$(CONFIG_MACH_OMAP4_BOWSER_SUBTYPE_BOWSER7) += board-bowser.o \
-					   board-bowser-bluetooth.o \
-					   board-bowser-panel.o \
-					   board-bowser-wifi.o \
-					   board-44xx-serial.o
-
-obj-$(CONFIG_MACH_OMAP4_BOWSER_SUBTYPE_JEM) += board-jem.o \
-					   board-bowser-bluetooth.o \
-					   board-bowser-panel.o \
-					   board-bowser-wifi.o \
-					   board-44xx-serial.o
-
-obj-$(CONFIG_MACH_OMAP4_BOWSER_SUBTYPE_SOHO) += board-soho.o \
-					   board-bowser-bluetooth.o \
-					   board-bowser-panel.o \
-					   board-bowser-wifi.o \
-					   board-44xx-serial.o
-
 obj-$(CONFIG_MACH_PCM049)		+= board-omap4pcm049.o
 
 obj-$(CONFIG_MACH_OMAP3517EVM)		+= board-am3517evm.o
