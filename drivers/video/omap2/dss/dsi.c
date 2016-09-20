@@ -3652,7 +3652,7 @@ err:
 }
 
 static void dsi_set_lp_rx_timeout(struct platform_device *dsidev,
-		unsigned ticks, bool x4, bool x16)
+		unsigned ticks, bool x4, bool x16, bool to)
 {
 	unsigned long fck;
 	unsigned long total_ticks;
@@ -3664,7 +3664,7 @@ static void dsi_set_lp_rx_timeout(struct platform_device *dsidev,
 	fck = dsi_fclk_rate(dsidev);
 
 	r = dsi_read_reg(dsidev, DSI_TIMING2);
-	r = FLD_MOD(r, 1, 15, 15);	/* LP_RX_TO */
+	r = FLD_MOD(r, to ? 1 : 0, 15, 15);	/* LP_RX_TO */
 	r = FLD_MOD(r, x16 ? 1 : 0, 14, 14);	/* LP_RX_TO_X16 */
 	r = FLD_MOD(r, x4 ? 1 : 0, 13, 13);	/* LP_RX_TO_X4 */
 	r = FLD_MOD(r, ticks, 12, 0);	/* LP_RX_COUNTER */
@@ -3679,7 +3679,7 @@ static void dsi_set_lp_rx_timeout(struct platform_device *dsidev,
 }
 
 static void dsi_set_ta_timeout(struct platform_device *dsidev, unsigned ticks,
-		bool x8, bool x16)
+		bool x8, bool x16, bool to)
 {
 	unsigned long fck;
 	unsigned long total_ticks;
@@ -3691,7 +3691,7 @@ static void dsi_set_ta_timeout(struct platform_device *dsidev, unsigned ticks,
 	fck = dsi_fclk_rate(dsidev);
 
 	r = dsi_read_reg(dsidev, DSI_TIMING1);
-	r = FLD_MOD(r, 1, 31, 31);	/* TA_TO */
+	r = FLD_MOD(r, 0, 31, 31);	/* TA_TO */
 	r = FLD_MOD(r, x16 ? 1 : 0, 30, 30);	/* TA_TO_X16 */
 	r = FLD_MOD(r, x8 ? 1 : 0, 29, 29);	/* TA_TO_X8 */
 	r = FLD_MOD(r, ticks, 28, 16);	/* TA_TO_COUNTER */
@@ -3706,7 +3706,8 @@ static void dsi_set_ta_timeout(struct platform_device *dsidev, unsigned ticks,
 }
 
 static void dsi_set_stop_state_counter(struct platform_device *dsidev,
-		unsigned ticks, bool x4, bool x16)
+		                       unsigned ticks, bool x4, bool x16,
+                                       bool stop_mode)
 {
 	unsigned long fck;
 	unsigned long total_ticks;
@@ -3718,7 +3719,7 @@ static void dsi_set_stop_state_counter(struct platform_device *dsidev,
 	fck = dsi_fclk_rate(dsidev);
 
 	r = dsi_read_reg(dsidev, DSI_TIMING1);
-	r = FLD_MOD(r, 1, 15, 15);	/* FORCE_TX_STOP_MODE_IO */
+	r = FLD_MOD(r, stop_mode ? 1 : 0, 15, 15);	/* FORCE_TX_STOP_MODE_IO */
 	r = FLD_MOD(r, x16 ? 1 : 0, 14, 14);	/* STOP_STATE_X16_IO */
 	r = FLD_MOD(r, x4 ? 1 : 0, 13, 13);	/* STOP_STATE_X4_IO */
 	r = FLD_MOD(r, ticks, 12, 0);	/* STOP_STATE_COUNTER_IO */
@@ -3733,7 +3734,7 @@ static void dsi_set_stop_state_counter(struct platform_device *dsidev,
 }
 
 static void dsi_set_hs_tx_timeout(struct platform_device *dsidev,
-		unsigned ticks, bool x4, bool x16)
+		unsigned ticks, bool x4, bool x16, bool to)
 {
 	unsigned long fck;
 	unsigned long total_ticks;
@@ -3745,7 +3746,7 @@ static void dsi_set_hs_tx_timeout(struct platform_device *dsidev,
 	fck = dsi_get_txbyteclkhs(dsidev);
 
 	r = dsi_read_reg(dsidev, DSI_TIMING2);
-	r = FLD_MOD(r, 1, 31, 31);	/* HS_TX_TO */
+	r = FLD_MOD(r, to ? 1 : 0, 31, 31);	/* HS_TX_TO */
 	r = FLD_MOD(r, x16 ? 1 : 0, 30, 30);	/* HS_TX_TO_X16 */
 	r = FLD_MOD(r, x4 ? 1 : 0, 29, 29);	/* HS_TX_TO_X8 (4 really) */
 	r = FLD_MOD(r, ticks, 28, 16);	/* HS_TX_TO_COUNTER */
@@ -3920,10 +3921,10 @@ static int dsi_proto_config(struct omap_dss_device *dssdev)
 			DSI_FIFO_SIZE_32);
 
 	/* XXX what values for the timeouts? */
-	dsi_set_stop_state_counter(dsidev, 0x1000, false, false);
-	dsi_set_ta_timeout(dsidev, 0x1fff, true, true);
-	dsi_set_lp_rx_timeout(dsidev, 0x1fff, true, true);
-	dsi_set_hs_tx_timeout(dsidev, 0x1fff, true, true);
+	dsi_set_stop_state_counter(dsidev, 0x1000, false, false, true);
+	dsi_set_ta_timeout(dsidev, 0x1fff, true, true, true);
+	dsi_set_lp_rx_timeout(dsidev, 0x1fff, true, true, true);
+	dsi_set_hs_tx_timeout(dsidev, 0x1fff, true, true, true);
 
 	switch (dsi_get_pixel_size(dssdev->panel.dsi_pix_fmt)) {
 	case 16:
