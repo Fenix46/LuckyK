@@ -2706,6 +2706,7 @@ static int dsi_sync_vc_l4(struct platform_device *dsidev, int channel)
 	if (r)
 		goto err0;
 
+#ifndef CONFIG_MACH_TUNA
 	/* Wait for completion only if TX_FIFO_NOT_EMPTY is still set */
 	if (REG_GET(dsidev, DSI_VC_CTRL(channel), 5, 5)) {
 		if (wait_for_completion_timeout(&completion,
@@ -2715,7 +2716,7 @@ static int dsi_sync_vc_l4(struct platform_device *dsidev, int channel)
 			goto err1;
 		}
 	}
-
+#endif
 	dsi_unregister_isr_vc(dsidev, channel, dsi_packet_sent_handler_l4,
 		&l4_data, DSI_VC_IRQ_PACKET_SENT);
 
@@ -4309,12 +4310,21 @@ int dsi_enable_video_output(struct omap_dss_device *dssdev, int channel)
 			BUG();
 		};
 
+#ifdef CONFIG_MACH_TUNA
+	dsi_vc_enable(dsidev, 1, true);
+#endif
 		dsi_if_enable(dsidev, false);
 		dsi_vc_enable(dsidev, channel, false);
 
 		/* MODE, 1 = video mode */
 		REG_FLD_MOD(dsidev, DSI_VC_CTRL(channel), 1, 4, 4);
 
+#ifdef CONFIG_MACH_TUNA
+	r = dsi_read_reg(dsidev, DSI_VC_CTRL(channel));
+	r = FLD_MOD(r, 0, 4, 4);
+	r = FLD_MOD(r, 1, 9, 9);
+	dsi_write_reg(dsidev, DSI_VC_CTRL(channel), r);
+#endif
 		word_count = DIV_ROUND_UP(dssdev->panel.timings.x_res * bpp, 8);
 
 		dsi_vc_write_long_header(dsidev, channel, data_type,
