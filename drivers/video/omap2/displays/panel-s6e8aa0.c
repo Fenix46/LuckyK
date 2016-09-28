@@ -212,7 +212,7 @@ static int s6e8aa0_write_block(struct s6e8aa0_data *s6, const u8 *data, int len)
 
 static int s6e8aa0_write_block_nosync(struct s6e8aa0_data *s6, const u8 *data, int len)
 {
-	return dsi_vc_dcs_write_nosync(s6->dssdev, s6->channel1, (u8 *)data, len);
+	return dsi_vc_generic_write_nosync(s6->dssdev, s6->channel1, (u8 *)data, len);
 }
 
 static int s6e8aa0_read_block(struct s6e8aa0_data *s6, u8 cmd, u8 *data, int len)
@@ -1588,7 +1588,7 @@ static int s6e8aa0_probe(struct omap_dss_device *dssdev)
 
 	dssdev->panel.config = OMAP_DSS_LCD_TFT;
 	dssdev->panel.timings = s6e8aa0_timings;
-	dssdev->panel.dsi_pix_fmt = OMAP_DSS_DSI_FMT_RGB888;
+	dssdev->panel.dsi_pix_fmt = bpp_to_datatype(dssdev->ctrl.pixel_size);
 
 	dssdev->ctrl.pixel_size = 24;
 	dssdev->panel.acbi = 0;
@@ -1766,6 +1766,8 @@ static int s6e8aa0_power_on(struct omap_dss_device *dssdev)
 
 		dsi_enable_video_output(dssdev, s6->channel0);
 		// HASH: TODO dsi_video_mode_enable(dssdev, 0x3E); /* DSI_DT_PXLSTREAM_24BPP_PACKED; */
+
+		r = dss_mgr_enable(dssdev->manager);
 
 		s6->enabled = 1;
 	}
