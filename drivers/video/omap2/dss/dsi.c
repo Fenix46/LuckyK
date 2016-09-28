@@ -4879,7 +4879,7 @@ static int dsi_display_init_dsi(struct omap_dss_device *dssdev)
 
         if(dssdev->panel.dsi_mode == OMAP_DSS_DSI_CMD_MODE) {
         	r = dsi_cmd_proto_config(dssdev);
-	else
+	} else {
         	r = dsi_video_proto_config(dssdev);
 	}
 
