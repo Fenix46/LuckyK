@@ -3969,8 +3969,8 @@ static int dsi_cmd_proto_config(struct omap_dss_device *dssdev)
 	}
 
 	r = dsi_read_reg(dsidev, DSI_CTRL);
-	r = FLD_MOD(r, 1, 1, 1);	/* CS_RX_EN */
-	r = FLD_MOD(r, 1, 2, 2);	/* ECC_RX_EN */
+	r = FLD_MOD(r, 0, 1, 1);	/* CS_RX_EN */
+	r = FLD_MOD(r, 0, 2, 2);	/* ECC_RX_EN */
 	r = FLD_MOD(r, 1, 3, 3);	/* TX_FIFO_ARBITRATION */
 	r = FLD_MOD(r, 1, 4, 4);	/* VP_CLK_RATIO, always 1, see errata*/
 	r = FLD_MOD(r, buswidth, 7, 6); /* VP_DATA_BUS_WIDTH */
@@ -3988,13 +3988,11 @@ static int dsi_cmd_proto_config(struct omap_dss_device *dssdev)
 
 	dsi_config_vp_num_line_buffers(dssdev);
 
-#ifndef CONFIG_MACH_TUNA
 	if (dssdev->panel.dsi_mode == OMAP_DSS_DSI_VIDEO_MODE) {
 		dsi_config_vp_sync_events(dssdev);
 		dsi_config_blanking_modes(dssdev);
 		dsi_check_dispc_hsync_period(dssdev);
 	}
-#endif
 
 	if(!dssdev->skip_init){
 		dsi_vc_initial_config(dsidev, 0);
@@ -4269,7 +4267,7 @@ static void dsi_proto_timings(struct omap_dss_device *dssdev)
 		r = dsi_read_reg(dsidev, DSI_VM_TIMING1);
 		r = FLD_MOD(r, hbp, 11, 0);	/* HBP */
 		r = FLD_MOD(r, hfp, 23, 12);	/* HFP */
-		r = FLD_MOD(r, hsync_end ? hsa : 1, 31, 24);	/* HSA */
+		r = FLD_MOD(r, hsync_end ? hsa : 0, 31, 24);	/* HSA */
 		dsi_write_reg(dsidev, DSI_VM_TIMING1, r);
 
 		r = dsi_read_reg(dsidev, DSI_VM_TIMING2);
@@ -4784,8 +4782,8 @@ static void dsi_display_uninit_dispc(struct omap_dss_device *dssdev)
 		irq = dssdev->manager->id == OMAP_DSS_CHANNEL_LCD ?
 			DISPC_IRQ_FRAMEDONE : DISPC_IRQ_FRAMEDONE2;
 
-//		omap_dispc_unregister_isr(dsi_framedone_irq_callback,
-//			(void *) dssdev, irq);
+		omap_dispc_unregister_isr_sync(dsi_framedone_irq_callback,
+			(void *) dssdev, irq);
         }
 }
 
