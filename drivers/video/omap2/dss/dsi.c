@@ -2939,6 +2939,10 @@ static u16 dsi_vc_flush_receive_data(struct platform_device *dsidev,
 			DSSERR("\tDCS long response, len %d\n",
 					FLD_GET(val, 23, 8));
 			dsi_vc_flush_long_data(dsidev, channel);
+		} else if (dt == MIPI_DSI_DT_RX_LONG_READ) {
+			DSSERR("\tlong response, len %d\n",
+					FLD_GET(val, 23, 8));
+			dsi_vc_flush_long_data(dsidev, channel);
 		} else {
 			DSSERR("\tunknown datatype 0x%02x\n", dt);
 		}
@@ -3411,7 +3415,8 @@ static int dsi_vc_read_rx_fifo(struct platform_device *dsidev, int channel,
 		return 2;
 	} else if (dt == (type == DSS_DSI_CONTENT_GENERIC ?
 			MIPI_DSI_RX_GENERIC_LONG_READ_RESPONSE :
-			MIPI_DSI_RX_DCS_LONG_READ_RESPONSE)) {
+			MIPI_DSI_RX_DCS_LONG_READ_RESPONSE ||
+                       dt == MIPI_DSI_DT_RX_LONG_READ)) {
 		int w;
 		int len = FLD_GET(val, 23, 8);
 		if (dsi->debug_read)
