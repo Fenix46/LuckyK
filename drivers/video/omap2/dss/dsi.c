@@ -3969,12 +3969,13 @@ static int dsi_proto_config(struct omap_dss_device *dssdev)
 	}
 
 	r = dsi_read_reg(dsidev, DSI_CTRL);
-	r = FLD_MOD(r, 0, 1, 1);	/* CS_RX_EN */
-	r = FLD_MOD(r, 0, 2, 2);	/* ECC_RX_EN */
+	r = FLD_MOD(r, 1, 1, 1);	/* CS_RX_EN */
+	r = FLD_MOD(r, 1, 2, 2);	/* ECC_RX_EN */
 	r = FLD_MOD(r, 1, 3, 3);	/* TX_FIFO_ARBITRATION */
 	r = FLD_MOD(r, 1, 4, 4);	/* VP_CLK_RATIO, always 1, see errata*/
 	r = FLD_MOD(r, buswidth, 7, 6); /* VP_DATA_BUS_WIDTH */
 	r = FLD_MOD(r, 0, 8, 8);	/* VP_CLK_POL */
+	r = FLD_MOD(r, 2, 13, 12);	/* LINE_BUFFER, 2 lines */
 	r = FLD_MOD(r, 1, 14, 14);	/* TRIGGER_RESET_MODE */
 	r = FLD_MOD(r, 1, 19, 19);	/* EOT_ENABLE */
 	if (!dss_has_feature(FEAT_DSI_DCS_CMD_CONFIG_VC)) {
@@ -3987,11 +3988,13 @@ static int dsi_proto_config(struct omap_dss_device *dssdev)
 
 	dsi_config_vp_num_line_buffers(dssdev);
 
+#ifndef CONFIG_MACH_TUNA
 	if (dssdev->panel.dsi_mode == OMAP_DSS_DSI_VIDEO_MODE) {
 		dsi_config_vp_sync_events(dssdev);
 		dsi_config_blanking_modes(dssdev);
 		dsi_check_dispc_hsync_period(dssdev);
 	}
+#endif
 
 	if(!dssdev->skip_init){
 		dsi_vc_initial_config(dsidev, 0);
@@ -4117,7 +4120,7 @@ static void dsi_proto_timings(struct omap_dss_device *dssdev)
 		r = dsi_read_reg(dsidev, DSI_VM_TIMING1);
 		r = FLD_MOD(r, hbp, 11, 0);	/* HBP */
 		r = FLD_MOD(r, hfp, 23, 12);	/* HFP */
-		r = FLD_MOD(r, hsync_end ? hsa : 0, 31, 24);	/* HSA */
+		r = FLD_MOD(r, hsync_end ? hsa : 1, 31, 24);	/* HSA */
 		dsi_write_reg(dsidev, DSI_VM_TIMING1, r);
 
 		r = dsi_read_reg(dsidev, DSI_VM_TIMING2);
@@ -4334,9 +4337,6 @@ int dsi_enable_video_output(struct omap_dss_device *dssdev, int channel)
 			BUG();
 		};
 
-#ifdef CONFIG_MACH_TUNA
-	dsi_vc_enable(dsidev, 1, true);
-#endif
 		dsi_if_enable(dsidev, false);
 		dsi_vc_enable(dsidev, channel, false);
 
@@ -4354,6 +4354,9 @@ int dsi_enable_video_output(struct omap_dss_device *dssdev, int channel)
 		dsi_vc_write_long_header(dsidev, channel, data_type,
 				word_count, 0);
 
+#ifdef CONFIG_MACH_TUNA
+	dsi_vc_enable(dsidev, 1, true);
+#endif
 		dsi_vc_enable(dsidev, channel, true);
 		dsi_if_enable(dsidev, true);
 	}
@@ -5294,10 +5297,38 @@ void dsi_uninit_platform_driver(void)
 	return platform_driver_unregister(&omap_dsihw_driver);
 }
 
-/* set extra videomode settings */
+/* set extra register hardcoding values for now (according to kozio) */
 void dsi_videomode_panel_preinit(struct omap_dss_device *dssdev)
 {
 	struct platform_device *dsidev = dsi_get_dsidev_from_dssdev(dssdev);
+
+	dsi_vc_enable(dsidev, 0, false);
+	dsi_vc_enable(dsidev, 1, false);
+	dsi_if_enable(dsidev, false);
+
+	/* configure timings */
+	dsi_write_reg(dsidev, DSI_VM_TIMING1, 0x010D301A);   /* HSA=1, HFP=211, HBP=26 */
+	dsi_write_reg(dsidev, DSI_VM_TIMING2, 0x04080F0F);   /* WINDOW_SIZE=4, VSA=8, VFP=15, VBP=15 */
+	dsi_write_reg(dsidev, DSI_VM_TIMING3, 0x04B00320);	 /* TL(31:16)=1200, VACT(15:0)=800 */
+
+	dsi_write_reg(dsidev, DSI_VM_TIMING4, 0x00487296);   /* HSA_HS_INTERLEAVING(23:16)=72, HFP_HS_INTERLEAVING(15:8)=114, HBP_HS_INTERLEAVING(7:0)=150 */
+	dsi_write_reg(dsidev, DSI_VM_TIMING5, 0x0082DF3B);   /* VC3_FIFO_EMPTINESS, VC2_FIFO_EMPTINESS, VC1_FIFO_EMPTINESS, VC0_FIFO_EMPTINESS */
+        dsi_write_reg(dsidev, DSI_VM_TIMING6, 0x7A6731D1);   /* HSA_LP_INTERLEAVING(23:16)=103, HFP_HS_INTERLEAVING(15:8)=49, HBP_HS_INTERLEAVING(7:0)=209 */
+	dsi_write_reg(dsidev, DSI_VM_TIMING7, 0x000E0013);   /* BL_HS_INTERLEAVING(23:16)=14, BL_LP_INTERLEAVING(15:0)=19 */
+
+	/* set TA_TO_COUNTER accordignly to kozio value(???) */
+	/* enable TA_TO and set it to max */
+	/* disable stop_mode but set it to max */
+	/* dsi_write_reg(dsidev, DSI_TIMING1, 0xFFFF7FFF) */
+
+	/* set TA_TO_COUNTER accordignly to kozio value(???) */
+        /* disable LP_RX_TO but set it to max */
+	/* enable HS_TX_TO and set it to max */
+	/* dsi_write_reg(dsidev, DSI_TIMING2, 0xFFFF7FFF) */
+
+	dsi_vc_enable(dsidev, 1, true);
+	dsi_vc_enable(dsidev, 0, true);
+	dsi_if_enable(dsidev, true);
 
 	/* Send null packet to start DDR clock  */
 	dsi_write_reg(dsidev, DSI_VC_SHORT_PACKET_HEADER(0), 0);
