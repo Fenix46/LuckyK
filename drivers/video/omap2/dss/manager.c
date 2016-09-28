@@ -565,6 +565,10 @@ int dss_init_overlay_managers(struct platform_device *pdev)
 		mgr->supported_displays =
 			dss_feat_get_supported_displays(mgr->id);
 
+		omap_dispc_set_irq_type(mgr->id, OMAP_DISPC_IRQ_TYPE_VSYNC);
+
+		omap_dispc_set_irq_type(mgr->id, OMAP_DISPC_IRQ_TYPE_FRAMEDONE);
+
 		INIT_LIST_HEAD(&mgr->overlays);
 
 		r = kobject_init_and_add(&mgr->kobj, &manager_ktype,
