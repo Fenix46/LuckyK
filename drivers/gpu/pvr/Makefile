@@ -25,7 +25,6 @@ ccflags-y += \
 	-DSUPPORT_LARGE_GENERAL_HEAP \
 	-DPVR_NO_OMAP_TIMER \
 	-DSYS_OMAP4_HAS_DVFS_FRAMEWORK \
-        -DPVR_ANDROID_NATIVE_WINDOW_HAS_SYNC \
 	-DSUPPORT_DC_CMDCOMPLETE_WHEN_NO_LONGER_DISPLAYED \
 	-Idrivers/gpu/pvr/sgx
 
@@ -92,7 +91,6 @@ pvrsrvkm-y := \
 	proc.o \
 	pvr_bridge_k.o \
 	pvr_debug.o \
-        pvr_sync.o \
 	mm.o \
 	mutex.o \
 	event.o \
