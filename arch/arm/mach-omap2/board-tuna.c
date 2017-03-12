@@ -795,6 +795,7 @@ static struct omap_device_pad tuna_uart3_pads[] __initdata = {
 	},
 };
 
+#if 0
 static struct omap_device_pad tuna_uart4_pads[] __initdata = {
 	{
 		.name	= "uart4_tx.uart4_tx",
@@ -805,6 +806,7 @@ static struct omap_device_pad tuna_uart4_pads[] __initdata = {
 		.enable	= OMAP_PIN_INPUT | OMAP_MUX_MODE0,
 	},
 };
+#endif
 
 static struct omap_board_data tuna_uart1_board_data_sample4 __initdata = {
 	.id = 0,
@@ -830,11 +832,13 @@ static struct omap_board_data tuna_uart3_board_data __initdata = {
 	.pads_cnt = ARRAY_SIZE(tuna_uart3_pads),
 };
 
+#if 0
 static struct omap_board_data tuna_uart4_board_data __initdata = {
 	.id = 3,
 	.pads = tuna_uart4_pads,
 	.pads_cnt = ARRAY_SIZE(tuna_uart4_pads),
 };
+#endif
 
 static struct omap_uart_port_info tuna_uart2_info __initdata = {
 	.dma_enabled = false,
@@ -856,7 +860,7 @@ static inline void __init board_serial_init(void)
 	omap_serial_init_port(uart1_board_data, NULL);
 	omap_serial_init_port(&tuna_uart2_board_data, &tuna_uart2_info);
 	omap_serial_init_port(&tuna_uart3_board_data, NULL);
-	omap_serial_init_port(&tuna_uart4_board_data, NULL);
+	//omap_serial_init_port(&tuna_uart4_board_data, NULL);
 }
 
 /* SPI flash memory in camera module */
