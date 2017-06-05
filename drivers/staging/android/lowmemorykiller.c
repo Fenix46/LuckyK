@@ -271,7 +271,6 @@ err_kobj:
 
 err:
 	unregister_shrinker(&lowmem_shrinker);
-	task_free_unregister(&task_nb);
 
 	return rc;
 }
