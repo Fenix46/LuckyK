@@ -436,7 +436,7 @@ static bool ion_handle_validate_frm_dev(struct ion_device *dev,
 	struct ion_client *client;
 	struct rb_node *n;
 
-	p = &dev->user_clients.rb_node;
+	p = &dev->clients.rb_node;
 	while (*p) {
 		parent = *p;
 		client = rb_entry(parent, struct ion_client, node);
